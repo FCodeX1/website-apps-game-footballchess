@@ -1,0 +1,8 @@
+{
+  "rules": {
+    "bola-catur-rooms": {
+      ".read": true,
+      ".write": true
+    }
+  }
+}
