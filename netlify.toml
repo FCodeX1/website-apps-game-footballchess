@@ -4,9 +4,9 @@
 
 [build.environment]
   NODE_VERSION = "20"
-  NPM_VERSION = "9.9.4"
   NODE_ENV = "development"
-  NPM_FLAGS = "--no-audit --no-fund --include=dev --legacy-peer-deps"
+  NPM_CONFIG_REGISTRY = "https://registry.npmjs.org/"
+  NPM_FLAGS = "--registry=https://registry.npmjs.org/ --no-audit --no-fund --include=dev --legacy-peer-deps"
 
 [[redirects]]
   from = "/*"

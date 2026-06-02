@@ -1,0 +1,9 @@
+{
+  "framework": "vite",
+  "installCommand": "npm install --registry=https://registry.npmjs.org/ --no-audit --no-fund --include=dev --legacy-peer-deps",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
+  "rewrites": [
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
