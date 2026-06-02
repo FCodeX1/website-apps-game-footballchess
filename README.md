@@ -1,31 +1,8 @@
-# Bola Catur Arena Polished V4
+# Bola Catur Arena Polished V5
 
-Game football manager + match tactics turn-based. Versi ini fokus memperbaiki gameplay agar AI lebih menyerang, UI lebih responsif, scout lebih fair, dan career lebih panjang.
+Game football manager + tactical board match engine.
 
-## Fitur utama
-
-- 48 klub Indonesia virtual.
-- Match playable setiap pekan, bukan simulasi kosong.
-- AI random-terarah berdasarkan style klub dan plan tersembunyi.
-- Action Point 3 AP per turn.
-- Dribel, run, umpan, through ball, tackle, skill move, tembak.
-- Goal overlay manual: gol tidak langsung terskip, klik `Lanjut Kick Off`.
-- Setelah gol, bola restart untuk tim yang kebobolan.
-- Offside line lebih jelas untuk through ball.
-- Auto defensive retreat saat bek terlalu tinggi dan lawan mendekati kiper.
-- Formasi lebih banyak + starting XI bisa diganti dari bench.
-- Career mode, save/load manual, board trust, fan trust, reputasi manager.
-- Youth academy dan player growth.
-- Personality pemain.
-- Story events.
-- Scout tertunda 1 match, batas scout mengikuti level akademi, maksimal 3.
-- Rare high potential hanya sekitar 5%.
-- Kas awal 0. Kalau belum save manual, refresh mulai fresh dari awal.
-- Income utama dari pertandingan home.
-- Cup bonus di pekan tertentu.
-- UI lebih responsif untuk mobile/desktop.
-
-## Cara jalan di VS Code
+## Jalankan di VS Code
 
 ```powershell
 npm install
@@ -38,22 +15,42 @@ Buka:
 http://localhost:5173/
 ```
 
-## Build production
+## Build
 
 ```powershell
 npm run build
 ```
 
-## Deploy Netlify
-
-Build command:
+Untuk Netlify:
 
 ```txt
-npm run build
+Build command: npm run build
+Publish directory: dist
 ```
 
-Publish directory:
+## V5 update
 
-```txt
-dist
-```
+- Awal aplikasi sekarang masuk ke Beranda/Landing Menu, bukan langsung tampilan liga atau laga.
+- Data fresh mulai dari kas Rp 0 selama belum load save.
+- Save bisa disimpan ke browser, di-download sebagai JSON, dan di-load lagi dari file JSON.
+- Panel gameplay dirombak agar aksi penting terlihat di sekitar papan dan tidak perlu banyak scroll.
+- AI dibuat lebih agresif menyerang dan lebih random-terarah.
+- Tackle peluang rendah punya 3% kejadian chaos: foul, cedera lawan, atau dua pemain cedera lalu auto-substitution.
+- Goal tetap pause sampai user klik lanjut kick off.
+- Setelah gol, bola kick off untuk tim yang kebobolan.
+
+
+## Netlify build fix
+Project ini dipin ke Node 20 dan npm 10.8.2 agar Netlify tidak memakai Node 22/npm 10.9.x yang kadang memunculkan error `Exit handler never called!` saat install dependency.
+
+File penting:
+- `.nvmrc`
+- `.node-version`
+- `netlify.toml`
+- `package.json` engines
+
+Di Netlify gunakan:
+- Build command: `npm run build`
+- Publish directory: `dist`
+
+Jika deploy masih memakai cache lama, jalankan **Clear cache and deploy**.

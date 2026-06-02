@@ -7,8 +7,12 @@ const MAX_ACTIONS = 62;
 const MAX_AP = 3;
 const GOAL_COLS = [3, 4];
 const INITIAL_CASH = 0;
-const SAVE_KEY = "bola-catur-arena-career-v4";
-const SAVE_VERSION = 4;
+const SAVE_KEY = "bola-catur-arena-career-v5";
+const SAVE_VERSION = 5;
+const SAVE_FILE_NAME = "bola-catur-arena-save.json";
+const COMPETITIONS = {
+  liga48: { key: "liga48", title: "Liga Utama 48 Klub", subtitle: "Musim penuh, home/away, piala selingan, ekonomi kandang.", badge: "Career" },
+};
 
 const CLUB_DATA = [
   [1, "FC Nusantara", "Jakarta", "#e63946", 60000, "Possession"],
@@ -276,6 +280,15 @@ function pickLineup(team, formationName, overrides = {}) {
     return { player: chosen, slot };
   });
 }
+function benchFor(team, formationName, overrides = {}) {
+  const lineup = pickLineup(team, formationName, overrides);
+  const used = new Set(lineup.map(({ player }) => player.id));
+  return team.players
+    .filter((p) => !used.has(p.id) && p.injuredWeeks <= 0 && p.bannedWeeks <= 0)
+    .slice()
+    .sort((a, b) => b.overall - a.overall)
+    .slice(0, 9);
+}
 function piecesFor(team, side, formationName, facilities, overrides = {}) {
   return pickLineup(team, formationName, overrides).map(({ player, slot }, idx) => {
     const spot = side === "home" ? slot : mirror(slot);
@@ -299,7 +312,9 @@ function drawCards(count = 3) {
 function createMatch({ homeTeam, awayTeam, userSide, userFormation, trainingPlan, facilities, lineupOverrides = {} }) {
   const homeFormation = homeTeam.id === MY_TEAM_ID ? userFormation : homeTeam.preferredFormation;
   const awayFormation = awayTeam.id === MY_TEAM_ID ? userFormation : awayTeam.preferredFormation;
-  const pieces = [...piecesFor(homeTeam, "home", homeFormation, facilities, homeTeam.id === MY_TEAM_ID ? lineupOverrides : {}), ...piecesFor(awayTeam, "away", awayFormation, facilities, awayTeam.id === MY_TEAM_ID ? lineupOverrides : {})];
+  const homeOverrides = homeTeam.id === MY_TEAM_ID ? lineupOverrides : {};
+  const awayOverrides = awayTeam.id === MY_TEAM_ID ? lineupOverrides : {};
+  const pieces = [...piecesFor(homeTeam, "home", homeFormation, facilities, homeOverrides), ...piecesFor(awayTeam, "away", awayFormation, facilities, awayOverrides)];
   const isDerby = homeTeam.rivalId === awayTeam.id || awayTeam.rivalId === homeTeam.id;
   const game = {
     homeId: homeTeam.id, awayId: awayTeam.id, homeName: homeTeam.name, awayName: awayTeam.name,
@@ -307,6 +322,7 @@ function createMatch({ homeTeam, awayTeam, userSide, userFormation, trainingPlan
     homeFormation, awayFormation, userSide, trainingPlan, facilities, isDerby,
     pieces, ballOwnerId: kickoffPlayer(pieces, "home"), turn: "home", ap: MAX_AP, score: { home: 0, away: 0 }, actionNo: 1, maxActions: MAX_ACTIONS,
     ended: false, winner: null, momentum: { home: 1, away: 0 }, effects: { home: [], away: [] }, usedCards: [], userCards: drawCards(4),
+    bench: { home: benchFor(homeTeam, homeFormation, homeOverrides), away: benchFor(awayTeam, awayFormation, awayOverrides) },
     aiPlan: pick(AI_PLANS), goalPause: null, highlights: [], lastGoalRestartSide: null,
     stats: { home: emptyStats(), away: emptyStats() },
     lastAction: `Kick off ${homeTeam.name}.`,
@@ -363,6 +379,25 @@ function applyAutoShape(game) {
 function saveCareer(payload) { try { window.localStorage.setItem(SAVE_KEY, JSON.stringify({ version: SAVE_VERSION, savedAt: Date.now(), ...payload })); return true; } catch { return false; } }
 function loadCareer() { try { const raw = window.localStorage.getItem(SAVE_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; } }
 function clearCareer() { try { window.localStorage.removeItem(SAVE_KEY); } catch {} }
+function downloadCareerFile(payload) {
+  try {
+    const blob = new Blob([JSON.stringify({ version: SAVE_VERSION, exportedAt: Date.now(), ...payload }, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = SAVE_FILE_NAME;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+    return true;
+  } catch { return false; }
+}
+function makeFreshMarket(academyLevel = 1) {
+  const free = [];
+  for (let i = 0; i < 96; i += 1) free.push(genPlayer(pick(EXTRA_POSITIONS), null, rng(-4, 8), i < 8 + academyLevel * 2));
+  return free.sort((a, b) => b.overall - a.overall);
+}
 function cupBonusForWeek(week, team, result) {
   if (!CUP_WEEKS.has(week)) return 0;
   const won = (result.homeId === team.id && result.homeGoals > result.awayGoals) || (result.awayId === team.id && result.awayGoals > result.homeGoals);
@@ -557,6 +592,54 @@ function possibleInjury(game, piece, reason = "duel") {
     appendLog(game, "🏥", `${firstName(piece.name)} cedera setelah ${reason}.`, { type: "injury", side: piece.side, playerId: piece.playerId, player: piece.name, weeks: rng(1, 4) });
   }
 }
+function autoReplaceInjuredPiece(game, piece, reason = "duel") {
+  if (!piece || piece.red) return;
+  const oldName = piece.name;
+  const oldPlayerId = piece.playerId;
+  const weeks = rng(1, 5);
+  piece.injured = true;
+  game.stats[piece.side].injuries += 1;
+  appendLog(game, "🏥", `${firstName(oldName)} cedera (${reason}) dan harus diganti.`, { type: "injury", side: piece.side, playerId: oldPlayerId, player: oldName, weeks });
+  const bench = game.bench?.[piece.side] || [];
+  const compat = COMPATIBLE[piece.role] || [piece.role];
+  let idx = bench.findIndex((p) => compat.includes(p.pos));
+  if (idx < 0) idx = bench.findIndex(Boolean);
+  const sub = idx >= 0 ? bench.splice(idx, 1)[0] : null;
+  if (!sub) {
+    piece.red = true;
+    appendLog(game, "🚑", `${piece.teamName} tidak punya pengganti siap. Tim bermain dengan 10 pemain.`);
+    if (game.ballOwnerId === piece.id) game.ballOwnerId = kickoffPlayer(game.pieces, otherSide(piece.side)) || game.ballOwnerId;
+    return;
+  }
+  Object.assign(piece, {
+    playerId: sub.id, name: sub.name, trait: sub.trait, personality: sub.personality, overall: sub.overall,
+    pace: sub.pace, shoot: sub.shoot, pass: sub.pass, dribble: sub.dribble, defend: sub.defend,
+    stamina: sub.stamina, energy: clamp(sub.fitness || 88, 50, 100), morale: clamp(sub.morale || 70, 40, 99),
+    yellow: 0, red: false, injured: false, subbedIn: true, role: piece.role,
+  });
+  appendLog(game, "🔁", `${firstName(sub.name)} masuk menggantikan ${firstName(oldName)}.`);
+}
+function lowChanceTackleChaos(game, tackler, target, chance) {
+  if (chance > 38 || !roll(3)) return false;
+  const side = tackler.side;
+  game.stats[side].fouls += 1;
+  game.momentum[side] = 0;
+  game.momentum[target.side] = clamp(game.momentum[target.side] + 2, 0, 7);
+  tackler.energy = clamp(tackler.energy - 9, 0, 100);
+  const outcome = rng(1, 3);
+  let text = `${firstName(tackler.name)} telat tackle karena peluangnya rendah (${Math.round(chance)}%). Pelanggaran.`;
+  if (outcome === 2) text += ` ${firstName(target.name)} cedera.`;
+  if (outcome === 3) text += ` Duel kacau: keduanya cedera.`;
+  tackler.yellow += 1;
+  game.stats[side].yellows += 1;
+  appendLog(game, "💥", text + " Kartu kuning.");
+  if (outcome === 2 || outcome === 3) autoReplaceInjuredPiece(game, target, "tackle keras");
+  if (outcome === 3) autoReplaceInjuredPiece(game, tackler, "benturan saat tackle");
+  game.ballOwnerId = target.id;
+  spendAp(game, side, 1);
+  if (!game.ended) { game.turn = target.side; game.ap = MAX_AP; }
+  return true;
+}
 function applyCard(game, cardKey, side) {
   const card = TACTIC_CARDS.find((c) => c.key === cardKey);
   if (!card || side !== game.userSide) return game;
@@ -664,7 +747,8 @@ function applyAction(game, action) {
       spendAp(next, side, 1);
       return next;
     }
-    const foulRisk = clamp(25 + (sideStyle(next, side) === "Physical" ? 10 : 0) + (next.isDerby ? 8 : 0), 10, 55);
+    if (lowChanceTackleChaos(next, piece, option.target, chance)) return next;
+    const foulRisk = clamp(18 + (sideStyle(next, side) === "Physical" ? 8 : 0) + (next.isDerby ? 5 : 0), 8, 42);
     if (roll(foulRisk)) {
       next.stats[side].fouls += 1;
       const yellowRisk = clamp(20 + (next.isDerby ? 10 : 0) + (piece.personality === "Hot Temper" ? 12 : 0) + (piece.yellow ? 20 : 0), 8, 78);
@@ -793,58 +877,77 @@ function bestAiAction(game) {
   const candidates = [];
   const add = (action, score, label) => candidates.push({ action, score: score + scoreActionNoise(style), label });
 
-  if (carrier && carrier.side !== game.turn) {
-    mine.forEach((p) => {
-      const t = tackleOptions(game, p.id)[0];
-      if (t) add({ type: "tackle", pieceId: p.id, targetId: t.target.id }, t.chance + 28 + (style === "High Press" ? 18 : 0) + (style === "Physical" ? 12 : 0), "tackle");
-      legalRunCells(game, p.id).forEach((cell) => {
-        const closeCarrier = 24 - manhattan(cell, carrier) * 5;
-        const protectGoal = 12 - goalDistance({ ...p, ...cell });
-        const blockLane = Math.abs(cell.x - carrier.x) <= 1 ? 6 : 0;
-        add({ type: "move", pieceId: p.id, x: cell.x, y: cell.y }, closeCarrier + protectGoal + blockLane + (style === "Park Bus" ? 12 : 0), "press/cover");
-      });
-    });
-  } else if (carrier && carrier.side === game.turn) {
+  if (carrier && carrier.side === game.turn) {
     const shot = shotInfo(game, carrier.id);
-    if (shot.can) add({ type: "shoot", pieceId: carrier.id }, shot.chance + 36 + (game.aiPlan === "Shoot Early" ? 24 : 0) + (style === "Chaos" ? rng(-12, 18) : 0), "shoot");
-    passOptions(game, carrier.id, true).slice(0, 9).forEach((p) => {
-      const offsidePenalty = isOffsidePosition(game, carrier, p.target) ? -42 : 0;
-      let score = p.chance + p.forwardBonus * 18 + (p.target.role === "ST" ? 22 : 0) - p.d + offsidePenalty;
-      if (["Counter", "Long Ball", "Wing Play"].includes(style)) score += 18;
-      if (["Sudden Through Ball", "Long Switch", "Counter Burst"].includes(game.aiPlan)) score += 24;
+    if (shot.can) {
+      const threshold = style === "Chaos" || game.aiPlan === "Shoot Early" ? 20 : style === "Long Ball" ? 25 : 32;
+      if (shot.chance >= threshold && rng(1, 100) <= (shot.chance >= 55 ? 72 : 38)) return { type: "shoot", pieceId: carrier.id };
+      add({ type: "shoot", pieceId: carrier.id }, shot.chance + 54 + (game.aiPlan === "Shoot Early" ? 32 : 0), "shoot");
+    }
+
+    const through = passOptions(game, carrier.id, true).slice(0, 10);
+    through.forEach((p) => {
+      const offsidePenalty = isOffsidePosition(game, carrier, p.target) ? -50 : 0;
+      let score = p.chance + p.forwardBonus * 24 + (p.target.role === "ST" ? 28 : 0) - p.d * 1.5 + offsidePenalty;
+      if (["Counter", "Long Ball", "Wing Play"].includes(style)) score += 22;
+      if (["Sudden Through Ball", "Long Switch", "Counter Burst"].includes(game.aiPlan)) score += 30;
+      if (goalDistance(p.target) <= 3) score += 22;
       add({ type: "through", pieceId: carrier.id, targetId: p.target.id }, score, "killer pass");
     });
-    passOptions(game, carrier.id, false).slice(0, 10).forEach((p) => {
-      let score = p.chance + p.forwardBonus * 9 + (p.target.role === "ST" ? 11 : 0);
-      if (["Possession", "Tiki Taka"].includes(style)) score += p.d <= 3 ? 18 : -3;
-      if (game.aiPlan === "Tempo Control") score += p.d <= 4 ? 14 : 0;
-      if (goalDistance(p.target) <= goalDistance(carrier)) score += 8;
+
+    const passes = passOptions(game, carrier.id, false).slice(0, 10);
+    passes.forEach((p) => {
+      let score = p.chance + p.forwardBonus * 12 + (p.target.role === "ST" ? 14 : 0);
+      if (["Possession", "Tiki Taka"].includes(style)) score += p.d <= 3 ? 20 : -2;
+      if (game.aiPlan === "Tempo Control") score += p.d <= 4 ? 16 : 0;
+      if (goalDistance(p.target) < goalDistance(carrier)) score += 12;
       add({ type: "pass", pieceId: carrier.id, targetId: p.target.id }, score, "pass");
     });
+
+    const forwardRuns = legalRunCells(game, carrier.id)
+      .map((cell) => ({ cell, progress: goalDistance(carrier) - goalDistance({ ...carrier, ...cell }), pressure: pressureAt(game, carrier.side, cell.x, cell.y) }))
+      .filter((r) => r.progress >= 0)
+      .sort((a, b) => (b.progress * 12 - b.pressure * 3) - (a.progress * 12 - a.pressure * 3));
+    if (forwardRuns.length && rng(1, 100) <= (style === "Counter" || game.aiPlan === "Risky Dribble" ? 50 : 28)) {
+      const top = forwardRuns.slice(0, Math.min(3, forwardRuns.length));
+      const chosen = pick(top).cell;
+      return { type: "move", pieceId: carrier.id, x: chosen.x, y: chosen.y };
+    }
     legalRunCells(game, carrier.id).forEach((cell) => {
       const progress = goalDistance(carrier) - goalDistance({ ...carrier, ...cell });
-      let score = progress * 28 - Math.abs(cell.x - 3.5) * 2 - pressureAt(game, carrier.side, cell.x, cell.y) * 7;
-      if (goalDistance({ ...carrier, ...cell }) <= 3) score += 26;
-      if (style === "Wing Play" && isWide(cell.x)) score += 18;
-      if (["Risky Dribble", "Counter Burst", "Chaos Gambit"].includes(game.aiPlan)) score += 20;
-      if (progress < 0) score -= 28;
+      let score = progress * 34 - Math.abs(cell.x - 3.5) * 2 - pressureAt(game, carrier.side, cell.x, cell.y) * 7;
+      if (goalDistance({ ...carrier, ...cell }) <= 3) score += 34;
+      if (style === "Wing Play" && isWide(cell.x)) score += 22;
+      if (["Risky Dribble", "Counter Burst", "Chaos Gambit"].includes(game.aiPlan)) score += 28;
+      if (progress < 0) score -= 40;
       add({ type: "move", pieceId: carrier.id, x: cell.x, y: cell.y }, score, "drive forward");
     });
-    if (game.ap >= 2 && rng(1, 100) <= (style === "Chaos" ? 32 : 14)) add({ type: "skill", pieceId: carrier.id }, 62 + game.momentum[game.turn] * 5, "skill");
+    if (game.ap >= 2 && rng(1, 100) <= (style === "Chaos" ? 38 : 16)) add({ type: "skill", pieceId: carrier.id }, 64 + game.momentum[game.turn] * 5, "skill");
+  } else if (carrier && carrier.side !== game.turn) {
+    mine.forEach((p) => {
+      const t = tackleOptions(game, p.id)[0];
+      if (t) add({ type: "tackle", pieceId: p.id, targetId: t.target.id }, t.chance + 36 + (style === "High Press" ? 20 : 0) + (style === "Physical" ? 14 : 0), "tackle");
+      legalRunCells(game, p.id).forEach((cell) => {
+        const closeCarrier = 34 - manhattan(cell, carrier) * 6;
+        const protectGoal = 16 - goalDistance({ ...p, ...cell });
+        const blockLane = Math.abs(cell.x - carrier.x) <= 1 ? 10 : 0;
+        add({ type: "move", pieceId: p.id, x: cell.x, y: cell.y }, closeCarrier + protectGoal + blockLane + (style === "Park Bus" ? 14 : 0), "press/cover");
+      });
+    });
   } else {
     mine.forEach((p) => legalRunCells(game, p.id).forEach((cell) => {
       const progress = goalDistance(p) - goalDistance({ ...p, ...cell });
       const central = 4 - Math.abs(cell.x - 3.5);
-      add({ type: "move", pieceId: p.id, x: cell.x, y: cell.y }, progress * 14 + central, "support run");
+      add({ type: "move", pieceId: p.id, x: cell.x, y: cell.y }, progress * 18 + central, "support run");
     }));
   }
 
   if (!candidates.length) return { type: "end" };
   candidates.sort((a, b) => b.score - a.score);
-  const poolSize = style === "Chaos" ? 8 : style === "Tiki Taka" ? 5 : 6;
-  const filtered = candidates.slice(0, poolSize).filter((c) => c.score > candidates[0].score - 32);
-  if (rng(1, 100) <= 4) return { type: "end" };
-  return pick(filtered.length ? filtered : candidates.slice(0, 3)).action;
+  const poolSize = style === "Chaos" ? 9 : style === "Tiki Taka" ? 6 : 7;
+  const filtered = candidates.slice(0, poolSize).filter((c) => c.score > candidates[0].score - 38);
+  if (rng(1, 100) <= 1) return { type: "end" };
+  return pick(filtered.length ? filtered : candidates.slice(0, 4)).action;
 }
 
 function simulateOtherMatch(home, away, week) {
@@ -965,6 +1068,8 @@ function FootballManager() {
   const [scoutUsed, setScoutUsed] = useState(0);
   const [manager, setManager] = useState({ name: "Coach Fakhri", reputation: 1, boardTrust: 70, fanTrust: 70 });
   const [storyLog, setStoryLog] = useState([]);
+  const [gameStarted, setGameStarted] = useState(false);
+  const [competition, setCompetition] = useState("liga48");
 
   const sorted = useMemo(() => [...teams].sort((a, b) => b.pts - a.pts || (b.gf - b.ga) - (a.gf - a.ga) || b.gf - a.gf), [teams]);
   const myTeam = teams.find((t) => t.id === MY_TEAM_ID);
@@ -975,10 +1080,7 @@ function FootballManager() {
   const objectiveCtx = useMemo(() => ({ rank: myRank, stats: { ...seasonStats, goals: myTeam.gf } }), [myRank, seasonStats, myTeam.gf]);
 
   useEffect(() => {
-    const free = [];
-    const academyLevel = facilities.academy || 1;
-    for (let i = 0; i < 90; i += 1) free.push(genPlayer(pick(EXTRA_POSITIONS), null, rng(-4, 8), i < 10 + academyLevel * 2));
-    setMarket(free.sort((a, b) => b.overall - a.overall));
+    setMarket(makeFreshMarket(facilities.academy || 1));
   }, []);
 
   const notify = useCallback((text, type = "info") => {
@@ -986,7 +1088,45 @@ function FootballManager() {
     window.setTimeout(() => setNotice(null), 3200);
   }, []);
 
+  const currentSavePayload = useCallback(() => ({
+    competition, teams, week, cash, formation, trainingPlan, facilities, seasonStats, claimed, market, log, manager, storyLog, lineupOverrides,
+  }), [cash, claimed, competition, facilities, formation, lineupOverrides, log, manager, market, seasonStats, storyLog, teams, trainingPlan, week]);
+
+  const applyLoadedData = useCallback((data, source = "save") => {
+    if (!data?.teams || !Array.isArray(data.teams)) { notify("File save tidak valid.", "error"); return; }
+    setCompetition(data.competition || "liga48");
+    setTeams(data.teams); setWeek(data.week || 1); setCash(Number(data.cash || 0)); setFormation(data.formation || "4-3-3");
+    setTrainingPlan(data.trainingPlan || "balanced"); setFacilities(data.facilities || { stadium: 1, training: 1, academy: 1, medical: 1, merchandise: 1, sponsor: 1 });
+    setSeasonStats(data.seasonStats || { homeWins: 0, derbyWins: 0, goals: 0, youthDeveloped: 0 }); setClaimed(data.claimed || []);
+    setMarket(data.market || makeFreshMarket(data.facilities?.academy || 1)); setLog(data.log || []); setManager(data.manager || { name: "Coach Fakhri", reputation: 1, boardTrust: 70, fanTrust: 70 });
+    setStoryLog(data.storyLog || []); setLineupOverrides(data.lineupOverrides || {});
+    setScoutQueue([]); setScoutUsed(0); setActive(null); setSelectedId(null); setSelectedPlayer(null); setGameStarted(true); setTab("dashboard");
+    notify(source === "file" ? "Save file berhasil dimuat." : "Save manual berhasil dimuat.", "success");
+  }, [notify]);
+
+  const startNewCareer = useCallback(() => {
+    const freshTeams = buildClubs();
+    setCompetition("liga48"); setTeams(freshTeams); setWeek(1); setCash(INITIAL_CASH); setFormation("4-3-3"); setTrainingPlan("balanced");
+    setFacilities({ stadium: 1, training: 1, academy: 1, medical: 1, merchandise: 1, sponsor: 1 });
+    setSeasonStats({ homeWins: 0, derbyWins: 0, goals: 0, youthDeveloped: 0 }); setClaimed([]); setMarket(makeFreshMarket(1)); setLog([]);
+    setManager({ name: "Coach Fakhri", reputation: 1, boardTrust: 70, fanTrust: 70 }); setStoryLog([]); setLineupOverrides({});
+    setScoutQueue([]); setScoutUsed(0); setActive(null); setSelectedId(null); setSelectedPlayer(null); setTab("dashboard"); setGameStarted(true);
+    notify("Career baru dimulai. Semua data fresh dan kas mulai dari Rp 0.", "success");
+  }, [notify]);
+
+  const importSaveFile = useCallback((file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try { applyLoadedData(JSON.parse(String(reader.result || "{}")), "file"); }
+      catch { notify("Gagal membaca file save JSON.", "error"); }
+    };
+    reader.onerror = () => notify("Gagal membuka file save.", "error");
+    reader.readAsText(file);
+  }, [applyLoadedData, notify]);
+
   const startMatch = useCallback(() => {
+    if (!gameStarted) { setTab("dashboard"); return; }
     if (active) { setTab("match"); return; }
     if (week > SEASON_FIXTURES.length) { notify("Musim selesai. Kamu bisa deploy dan mulai season baru dengan refresh.", "warn"); return; }
     if (!myFixture) { notify("Tidak ada jadwal tim kamu minggu ini.", "warn"); return; }
@@ -998,7 +1138,7 @@ function FootballManager() {
     setSelectedId(game.ballOwnerId && getPiece(game, game.ballOwnerId)?.side === userSide ? game.ballOwnerId : null);
     setTab("match");
     notify(`${homeTeam.name} vs ${awayTeam.name}. Kamu bermain sebagai ${sideLabel(userSide)}.`, game.isDerby ? "derby" : "success");
-  }, [active, facilities, formation, lineupOverrides, myFixture, notify, teams, trainingPlan, week]);
+  }, [active, facilities, formation, gameStarted, lineupOverrides, myFixture, notify, teams, trainingPlan, week]);
 
   useEffect(() => {
     if (aiPaused || !active?.game || active.game.ended || active.game.goalPause || active.game.turn === active.game.userSide) return undefined;
@@ -1116,18 +1256,21 @@ function FootballManager() {
 
   const scoutLimit = Math.min(3, 1 + Math.floor((facilities.academy || 1) / 2));
   const saveNow = () => {
-    const ok = saveCareer({ teams, week, cash, formation, trainingPlan, facilities, seasonStats, claimed, market, log, manager, storyLog, lineupOverrides });
-    notify(ok ? "Career disimpan manual. Refresh berikutnya bisa Load Save." : "Gagal menyimpan career.", ok ? "success" : "error");
+    const ok = saveCareer(currentSavePayload());
+    notify(ok ? "Career disimpan manual ke browser." : "Gagal menyimpan career.", ok ? "success" : "error");
+  };
+  const exportSave = () => {
+    const payload = currentSavePayload();
+    saveCareer(payload);
+    const ok = downloadCareerFile(payload);
+    notify(ok ? "Save di-download sebagai file JSON." : "Gagal download save.", ok ? "success" : "error");
   };
   const loadNow = () => {
     const data = loadCareer();
-    if (!data?.teams) { notify("Belum ada save manual. Game tetap fresh dari nol.", "warn"); return; }
-    setTeams(data.teams); setWeek(data.week || 1); setCash(data.cash || 0); setFormation(data.formation || "4-3-3");
-    setTrainingPlan(data.trainingPlan || "balanced"); setFacilities(data.facilities || facilities); setSeasonStats(data.seasonStats || seasonStats);
-    setClaimed(data.claimed || []); setMarket(data.market || market); setLog(data.log || []); setManager(data.manager || manager); setStoryLog(data.storyLog || []); setLineupOverrides(data.lineupOverrides || {});
-    setActive(null); setSelectedId(null); notify("Save manual berhasil dimuat.", "success");
+    if (!data?.teams) { notify("Belum ada save manual. Pilih Career Baru atau import file save.", "warn"); return; }
+    applyLoadedData(data, "local");
   };
-  const resetSave = () => { clearCareer(); notify("Save manual dihapus. Refresh akan mulai fresh dari 0.", "warn"); };
+  const resetSave = () => { clearCareer(); notify("Save manual di browser dihapus. File download tetap aman kalau kamu punya.", "warn"); };
   const answerStory = (eventId, choice) => {
     setStoryLog((prev) => prev.map((e) => e.id === eventId ? { ...e, choice, effect: choice.includes("Promosikan") ? "+Youth" : choice.includes("ofensif") ? "+Fans" : "+Board" } : e));
     setManager((m) => ({ ...m, fanTrust: clamp(m.fanTrust + (choice.includes("ofensif") ? 3 : 1), 0, 100), boardTrust: clamp(m.boardTrust + (choice.includes("tenang") || choice.includes("realistis") ? 3 : 0), 0, 100) }));
@@ -1144,17 +1287,23 @@ function FootballManager() {
   };
 
   const tabs = [["dashboard", "Home"], ["career", "Career"], ["training", "Latihan"], ["squad", "Skuad"], ["tactics", "Taktik"], ["match", "Main"], ["schedule", "Jadwal"], ["table", "Klasemen"], ["transfer", "Transfer"], ["youth", "Youth"], ["story", "Story"], ["facilities", "Fasilitas"], ["objectives", "Target"], ["clubs", "Klub"]];
+  if (!gameStarted) {
+    return <div className="appShell landingShell">
+      {notice && <Notice notice={notice} />}
+      <LandingScreen competition={competition} setCompetition={setCompetition} startNewCareer={startNewCareer} loadNow={loadNow} importSaveFile={importSaveFile} />
+    </div>;
+  }
   return <div className="appShell">
     {notice && <Notice notice={notice} />}
     <header className="topbar">
-      <div className="brand"><div className="logo" style={{ background: myTeam.color }}>⚽</div><div><h1>{myTeam.name}</h1><p>Bola Catur Arena Polished V4</p></div></div>
+      <div className="brand"><div className="logo" style={{ background: myTeam.color }}>⚽</div><div><h1>{myTeam.name}</h1><p>Bola Catur Arena V5</p></div></div>
       <div className="quickStats"><Stat label="Pekan" value={`${Math.min(week, SEASON_FIXTURES.length)}/${SEASON_FIXTURES.length}`} /><Stat label="Posisi" value={`#${myRank}`} /><Stat label="Kas" value={money(cash)} /><Stat label="AP" value={active?.game ? active.game.ap : "-"} /></div>
       <button className="primary big" onClick={startMatch}>{active ? "LANJUT MATCH" : "MAIN PEKAN"}</button>
     </header>
     <nav className="tabs">{tabs.map(([id, label]) => <button key={id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}>{label}</button>)}</nav>
     <main>
       {tab === "dashboard" && <Dashboard team={myTeam} rank={myRank} week={week} cash={cash} fixture={myFixture} teams={teams} startMatch={startMatch} active={active} facilities={facilities} trainingPlan={trainingPlan} objectives={objectives} objectiveCtx={objectiveCtx} claimed={claimed} />}
-      {tab === "career" && <CareerTab manager={manager} saveNow={saveNow} loadNow={loadNow} resetSave={resetSave} />}
+      {tab === "career" && <CareerTab manager={manager} saveNow={saveNow} exportSave={exportSave} loadNow={loadNow} resetSave={resetSave} importSaveFile={importSaveFile} />}
       {tab === "training" && <TrainingTab trainingPlan={trainingPlan} setTrainingPlan={setTrainingPlan} />}
       {tab === "squad" && <SquadTab team={myTeam} selected={selectedPlayer} setSelected={setSelectedPlayer} sell={sell} />}
       {tab === "tactics" && <TacticsTab team={myTeam} formation={formation} setFormation={setFormation} lineupOverrides={lineupOverrides} setLineupOverrides={setLineupOverrides} />}
@@ -1171,6 +1320,23 @@ function FootballManager() {
   </div>;
 }
 
+function LandingScreen({ competition, setCompetition, startNewCareer, loadNow, importSaveFile }) {
+  const menus = ["Career", "Latihan", "Skuad", "Taktik", "Main Pekan", "Transfer", "Youth", "Fasilitas", "Klasemen", "Klub"];
+  return <main className="landingMain">
+    <section className="landingHero">
+      <div className="landingBall">⚽</div>
+      <p className="eyebrow">Bola Catur Arena</p>
+      <h1>Mulai dari Beranda, lalu pilih kariermu.</h1>
+      <p>Data tidak langsung dimuat ke laga. Pilih kompetisi, mulai career baru, load save browser, atau import file save JSON. Kalau tidak ada save, semuanya fresh dari kas Rp 0.</p>
+      <div className="landingActions"><button className="primary big" onClick={startNewCareer}>Career Baru</button><button className="ghost big" onClick={loadNow}>Load Browser Save</button><label className="fileButton big">Load File Save<input type="file" accept="application/json,.json" onChange={(e) => importSaveFile(e.target.files?.[0])} /></label></div>
+    </section>
+    <section className="landingGrid">
+      <Card><h3>Pilih Kompetisi</h3><div className="competitionGrid">{Object.values(COMPETITIONS).map((c) => <button key={c.key} className={competition === c.key ? "active" : ""} onClick={() => setCompetition(c.key)}><b>{c.title}</b><span>{c.subtitle}</span><small>{c.badge}</small></button>)}</div></Card>
+      <Card><h3>Menu Setelah Mulai</h3><p className="muted">Tombol menu utama baru muncul setelah kamu memulai/load career, seperti game pada umumnya.</p><div className="menuPreview">{menus.map((m) => <span key={m}>{m}</span>)}</div></Card>
+      <Card><h3>Aturan Ekonomi</h3><div className="infoGrid"><span>Kas awal</span><b>Rp 0</b><span>Pemasukan utama</span><b>Laga Home</b><span>Save</span><b>Manual + JSON</b><span>Refresh tanpa save</span><b>Fresh</b></div></Card>
+    </section>
+  </main>;
+}
 function Notice({ notice }) { return <div className={`notice ${notice.type}`}>{notice.text}</div>; }
 function Stat({ label, value }) { return <div className="stat"><b>{value}</b><span>{label}</span></div>; }
 function Card({ children, className = "", style }) { return <div className={`card ${className}`} style={style}>{children}</div>; }
@@ -1198,7 +1364,7 @@ function TrainingTab({ trainingPlan, setTrainingPlan }) {
 function MatchTab({ active, selectedId, setSelectedId, onAction, finishWeek, startMatch, aiPaused, setAiPaused }) {
   if (!active) return <Section title="Match" sub="Belum ada pertandingan aktif."><Card className="empty"><h3>Belum mulai</h3><p>Klik MAIN PEKAN untuk membuka pertandingan playable.</p><button className="primary" onClick={startMatch}>Main Pekan</button></Card></Section>;
   const game = active.game;
-  const humanTurn = game.turn === game.userSide && !game.ended;
+  const humanTurn = game.turn === game.userSide && !game.ended && !game.goalPause;
   const selected = getPiece(game, selectedId);
   const carrier = getPiece(game, game.ballOwnerId);
   const runCells = selected ? legalRunCells(game, selected.id) : [];
@@ -1206,18 +1372,40 @@ function MatchTab({ active, selectedId, setSelectedId, onAction, finishWeek, sta
   const throughs = selected ? passOptions(game, selected.id, true) : [];
   const tackles = selected ? tackleOptions(game, selected.id) : [];
   const shot = selected ? shotInfo(game, selected.id) : { can: false, chance: 0 };
-  return <Section title="Live Match" sub={game.isDerby ? "🔥 Derby mode aktif: kartu, emosi, bonus pemasukan home lebih tinggi." : "Gunakan AP seperti catur: pikirkan 2-3 langkah ke depan."}>
-    <div className="matchLayout">
-      <Card className="boardCard"><Scoreboard game={game} />{game.goalPause && <GoalOverlay game={game} onResume={() => onAction({ type: "resumeGoal" })} />}<Board game={game} selectedId={selectedId} setSelectedId={setSelectedId} runCells={runCells} passes={passes} throughs={throughs} tackles={tackles} onAction={onAction} humanTurn={humanTurn} />{game.ended && <button className="primary full" onClick={finishWeek}>Simpan Hasil & Lanjut Pekan</button>}</Card>
-      <Card className="controlPanel"><div className="turnBox"><b>{game.ended ? "FULL TIME" : `${sideLabel(game.turn)} TURN`}</b><span>AP {game.ap}/{MAX_AP} · Menit {minuteOf(game)}'</span><small>{game.turn !== game.userSide ? `AI Plan: ${game.aiPlan}` : getCoachHint(game)}</small></div><div className="momentum"><span>Momentum Home <b>{game.momentum.home}</b></span><span>Momentum Away <b>{game.momentum.away}</b></span></div>
-        <h3>Kartu Taktik</h3><div className="tacticHand">{game.userCards?.map((c) => <button key={c.uid} disabled={!humanTurn} onClick={() => onAction({ type: "card", cardKey: c.key })}><b>{c.icon} {c.name}</b><small>{c.desc}</small></button>)}</div><ActiveEffects game={game} />
-        <h3>Aksi</h3>{selected ? <div className="selectedBox"><b>{selected.role} · {selected.name}</b><small>{selected.trait} · Energy {selected.energy}% · {selected.teamName}</small><div className="actionButtons"><button className="shootButton" disabled={!shot.can || !humanTurn} onClick={() => onAction({ type: "shoot", pieceId: selected.id })}>🥅 TEMBAK {shot.can ? `${shot.chance}%` : "-"} · 2AP</button><button disabled={!humanTurn || game.ballOwnerId !== selected.id || game.ap < 2} onClick={() => onAction({ type: "skill", pieceId: selected.id })}>Skill Move · 2AP</button>{tackles[0] && <button disabled={!humanTurn} onClick={() => onAction({ type: "tackle", pieceId: selected.id, targetId: tackles[0].target.id })}>Tackle {tackles[0].chance}% · 1AP</button>}<button disabled={!humanTurn} onClick={() => onAction({ type: "end" })}>End Turn</button></div><PassList title="Umpan" options={passes} type="pass" piece={selected} onAction={onAction} humanTurn={humanTurn} /><PassList title="Through Ball" options={throughs} type="through" piece={selected} onAction={onAction} humanTurn={humanTurn} /></div> : <p className="muted">Pilih pemain kamu di papan.</p>}
-        <button className="ghost full" onClick={() => setAiPaused(!aiPaused)}>{aiPaused ? "Lanjutkan AI" : "Pause AI"}</button><div className="carrierBox">Bola: <b>{carrier?.name}</b><small>{carrier?.teamName}</small></div><StatsBox game={game} /><h3>Riwayat</h3><div className="history">{game.history.map((h, i) => <div key={`${h.minute}-${i}`}><small>{h.minute}'</small><span>{h.icon}</span><p>{h.text}</p></div>)}</div></Card>
+  return <Section title="Live Match" sub={game.isDerby ? "🔥 Derby mode aktif: kartu, emosi, bonus pemasukan home lebih tinggi." : "Gameplay dibuat seperti catur bola: pilih pemain, baca peluang, pakai AP, lalu eksekusi."}>
+    <div className="matchGridV5">
+      <Card className="matchInfoDock">
+        <div className="turnBox compact"><b>{game.ended ? "FULL TIME" : `${sideLabel(game.turn)} TURN`}</b><span>AP {game.ap}/{MAX_AP} · Menit {minuteOf(game)}'</span><small>{game.turn !== game.userSide ? `AI sedang menjalankan rencana tersembunyi.` : getCoachHint(game)}</small></div>
+        <div className="carrierBox">Bola: <b>{carrier?.name}</b><small>{carrier?.teamName}</small></div>
+        <div className="momentum"><span>Home <b>{game.momentum.home}</b></span><span>Away <b>{game.momentum.away}</b></span></div>
+        <ActiveEffects game={game} />
+        <button className="ghost full" onClick={() => setAiPaused(!aiPaused)}>{aiPaused ? "Lanjutkan AI" : "Pause AI"}</button>
+      </Card>
+
+      <Card className="boardCard boardFocus">
+        <Scoreboard game={game} />
+        {game.goalPause && <GoalOverlay game={game} onResume={() => onAction({ type: "resumeGoal" })} />}
+        <Board game={game} selectedId={selectedId} setSelectedId={setSelectedId} runCells={runCells} passes={passes} throughs={throughs} tackles={tackles} onAction={onAction} humanTurn={humanTurn} />
+        {game.ended && <button className="primary full" onClick={finishWeek}>Simpan Hasil & Lanjut Pekan</button>}
+      </Card>
+
+      <Card className="actionDock">
+        <h3>Aksi Utama</h3>
+        {selected ? <div className="selectedBox"><b>{selected.role} · {selected.name}</b><small>{selected.trait} · Energy {selected.energy}% · {selected.teamName}</small>
+          <div className="actionButtons pro"><button className="shootButton" disabled={!shot.can || !humanTurn} onClick={() => onAction({ type: "shoot", pieceId: selected.id })}>🥅 TEMBAK {shot.can ? `${shot.chance}%` : "-"}<small>2AP</small></button><button disabled={!humanTurn || game.ballOwnerId !== selected.id || game.ap < 2} onClick={() => onAction({ type: "skill", pieceId: selected.id })}>✨ Skill<small>2AP</small></button>{tackles[0] && <button disabled={!humanTurn} onClick={() => onAction({ type: "tackle", pieceId: selected.id, targetId: tackles[0].target.id })}>⚔️ Tackle {tackles[0].chance}%<small>1AP</small></button>}<button disabled={!humanTurn} onClick={() => onAction({ type: "end" })}>⏭️ End<small>Turn</small></button></div>
+          <PassList title="Umpan Terbaik" options={passes} type="pass" piece={selected} onAction={onAction} humanTurn={humanTurn} />
+          <PassList title="Through Ball" options={throughs} type="through" piece={selected} onAction={onAction} humanTurn={humanTurn} />
+        </div> : <p className="muted">Pilih pemain kamu di papan. Opsi aksi akan muncul di sini.</p>}
+        <h3>Kartu Taktik</h3><div className="tacticHand compactCards">{game.userCards?.map((c) => <button key={c.uid} disabled={!humanTurn} onClick={() => onAction({ type: "card", cardKey: c.key })}><b>{c.icon} {c.name}</b><small>{c.desc}</small></button>)}</div>
+      </Card>
+
+      <Card className="matchBottomDock"><StatsBox game={game} /><div className="history compactHistory">{game.history.slice(0, 6).map((h, i) => <div key={`${h.minute}-${i}`}><small>{h.minute}'</small><span>{h.icon}</span><p>{h.text}</p></div>)}</div></Card>
     </div>
   </Section>;
 }
+
 function ActiveEffects({ game }) { const all = ["home", "away"].flatMap((side) => (game.effects[side] || []).map((e) => ({ ...e, side }))); return <div className="effects">{all.length === 0 ? <small className="muted">Belum ada efek taktik aktif.</small> : all.map((e) => <span key={`${e.side}-${e.key}`}>{sideLabel(e.side)}: {e.key} ({e.ttl})</span>)}</div>; }
-function PassList({ title, options, type, piece, onAction, humanTurn }) { if (!options.length) return null; return <div className="passList"><b>{title}</b>{options.slice(0, 5).map((o) => <button key={`${type}-${o.target.id}`} disabled={!humanTurn} onClick={() => onAction({ type, pieceId: piece.id, targetId: o.target.id })}><span>{o.target.role} {firstName(o.target.name)}</span><small>{o.chance}% · {o.cost}AP</small></button>)}</div>; }
+function PassList({ title, options, type, piece, onAction, humanTurn }) { if (!options.length) return null; return <div className="passList"><b>{title}</b>{options.slice(0, 3).map((o) => <button key={`${type}-${o.target.id}`} disabled={!humanTurn} onClick={() => onAction({ type, pieceId: piece.id, targetId: o.target.id })}><span>{o.target.role} {firstName(o.target.name)}</span><small>{o.chance}% · {o.cost}AP</small></button>)}</div>; }
 function getCoachHint(game) {
   const carrier = getPiece(game, game.ballOwnerId);
   if (!carrier) return "Cari pemain bebas dan rebut bola.";
@@ -1301,11 +1489,11 @@ function TransferTab({ market, cash, buy, loan, scout, scoutQueue, scoutUsed, sc
     <div className="playerGrid">{filtered.map((p) => <div key={p.id} className={`transferCard ${p.scoutStatus === "pending" ? "pending" : ""} ${p.scoutStatus === "gem" ? "gem" : ""}`}><PlayerCard player={p} active={false} onClick={() => scout(p)} /><div className="scoutBadge">{p.scoutStatus === "pending" ? "🔎 Scout berjalan" : p.scouted ? (p.rarePotential ? "🌟 Rare potential" : "📋 Scout normal") : "POT ??"}</div><div className="transferActions"><button className="ghost" disabled={p.scouted || p.scoutStatus === "pending" || scoutUsed >= scoutLimit} onClick={() => scout(p)}>Scout</button><button disabled={cash < Math.round(p.value * 0.14)} onClick={() => loan(p)}>Loan {money(Math.round(p.value * 0.14))}</button><button disabled={cash < p.value} onClick={() => buy(p)}>Buy {money(p.value)}</button></div></div>)}</div>
   </Section>;
 }
-function CareerTab({ manager, saveNow, loadNow, resetSave }) {
-  return <Section title="Career Mode" sub="Save tidak otomatis. Kalau tidak pernah Save Manual, refresh akan mulai fresh dari kas 0.">
+function CareerTab({ manager, saveNow, exportSave, loadNow, resetSave, importSaveFile }) {
+  return <Section title="Career Mode" sub="Save tidak otomatis. Kalau tidak pernah Save Manual atau import file, refresh akan mulai fresh dari kas 0.">
     <div className="cardsGrid">
       <Card><h3>Manager</h3><div className="infoGrid"><span>Nama</span><b>{manager.name}</b><span>Reputasi</span><b>Lv {manager.reputation}</b><span>Board Trust</span><b>{manager.boardTrust}%</b><span>Fans Trust</span><b>{manager.fanTrust}%</b></div></Card>
-      <Card><h3>Save Game</h3><p className="muted">Gunakan Save Manual saat mau lanjut nanti. Load hanya mengambil save yang kamu buat.</p><div className="saveButtons"><button className="primary" onClick={saveNow}>Save Manual</button><button className="ghost" onClick={loadNow}>Load Save</button><button className="danger" onClick={resetSave}>Hapus Save</button></div></Card>
+      <Card><h3>Save Game</h3><p className="muted">Save Manual menyimpan ke browser. Download Save membuat file JSON yang bisa kamu simpan dan load lagi di device lain.</p><div className="saveButtons"><button className="primary" onClick={saveNow}>Save ke Browser</button><button className="primary" onClick={exportSave}>Download Save JSON</button><button className="ghost" onClick={loadNow}>Load Browser Save</button><label className="fileButton">Load File Save<input type="file" accept="application/json,.json" onChange={(e) => importSaveFile(e.target.files?.[0])} /></label><button className="danger" onClick={resetSave}>Hapus Save Browser</button></div></Card>
       <Card><h3>Kontrak Manager</h3><p>Board akan menilai hasil, gaya main, target season, dan derby. Jika trust rendah, tekanan naik.</p><ProgressLine label="Board" value={manager.boardTrust} target={100} /><ProgressLine label="Fans" value={manager.fanTrust} target={100} /></Card>
     </div>
   </Section>;
