@@ -1,0 +1,54 @@
+UPDATE BESAR BOLA CATUR ARENA - V12 SMOOTH AI GAMEPLAY
+
+Fokus update v12:
+- Memperhalus gerakan AI dan pemain.
+- Membuat AI lebih mengikuti gaya main, role, posisi, dan shape tim.
+- Menambahkan tombol Switch Pemain dekat bola.
+- Menambahkan tombol Kiper Maju untuk intercept/tackle.
+- Memastikan tackle tetap memakai success rate dan tetap bisa menghasilkan pelanggaran, kartu, cedera ringan, atau cedera fatal.
+- Menyesuaikan UI tombol mobile/desktop agar lebih cepat dan enak dimainkan.
+
+DETAIL GAMEPLAY REAL-TIME:
+1. Movement smoother
+- Tick realtime dipoles dari sisi feel agar gerakan tidak terlalu patah.
+- Target AI sekarang tidak lompat-lompat terlalu kasar.
+- Pemain punya smoothing target adaptif.
+- Velocity pemain lebih stabil.
+- Pemain lebih disiplin kembali ke shape dan role.
+
+2. AI mengikuti gaya main
+- Wing Play lebih melebar dan fullback/winger lebih aktif support sisi.
+- Counter dan Long Ball lebih direct ke depan.
+- High Press/Gegenpress lebih berani maju pressing.
+- Park Bus/Catenaccio lebih turun, compact, dan menjaga blok.
+- Tiki Taka/Possession lebih menjaga jarak support dan opsi umpan.
+- Role discipline ditambahkan agar CB/GK/CDM tidak lari liar seperti winger/striker.
+
+3. Switch pemain dekat bola
+- Tombol Switch ditambahkan di mobile dan panel desktop.
+- Switch memilih pemain user yang paling dekat/berguna di sekitar bola.
+- Kiper tidak ikut siklus switch utama.
+- Tekan berulang akan cycling di antara beberapa pemain dekat bola.
+- Panel Quick Switch sekarang mengurutkan pemain berdasarkan jarak ke bola.
+
+4. Kiper maju
+- Tombol Kiper ditambahkan di mobile.
+- Tombol Kiper Maju ditambahkan di desktop controls.
+- Saat ditekan, kiper langsung maju beberapa detik untuk mengejar bola, intercept, atau tackle lawan yang datang.
+- Kiper rush tetap berisiko: bisa sukses, gagal, foul, kartu kuning, kartu merah, atau membuat cedera.
+
+5. Tackle success rate tetap aktif
+- Tackle realtime tetap punya chance berdasarkan defend, dribble lawan, stamina, pace, jarak, style, dan kondisi rush.
+- Tackle manual/forced lebih berisiko foul.
+- Kiper maju punya bonus intercept tapi juga foul/card risk lebih besar.
+- Cedera tetap bisa terjadi dari duel tackle, tackle keras, atau benturan kiper.
+
+6. UI mobile/desktop
+- Tombol mobile ditambah Switch dan Kiper tanpa membuat modal transparan.
+- Tombol diberi style khusus agar jelas dan cepat ditekan.
+- Layout desktop control grid diperlebar agar tombol baru rapi.
+- Landscape mobile tetap lebih direkomendasikan untuk gameplay real-time.
+
+Build test:
+- npm install berhasil.
+- npm run build berhasil.

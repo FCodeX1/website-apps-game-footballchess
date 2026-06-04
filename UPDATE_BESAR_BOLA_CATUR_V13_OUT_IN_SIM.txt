@@ -1,0 +1,71 @@
+UPDATE BESAR BOLA CATUR ARENA V13 - OUT/IN + FAST MATCH + QUICK SIM
+
+Build test:
+- npm install berhasil.
+- npm run build berhasil.
+
+Update gameplay realtime:
+1. Bola out / bola in
+   - Bola sekarang bisa keluar lapangan lewat sideline atau goal line.
+   - Jika bola keluar samping, game memberi throw-in cepat ke tim lawan dari sentuhan terakhir.
+   - Jika shot melebar, game memberi goal kick.
+   - Jika bola diblok bek lalu keluar goal line, game memberi corner.
+   - Ada chip UI BOLA IN / restart di atas pitch agar user tahu status bola.
+   - Corner ikut tercatat di statistik.
+
+2. Kick-off / restart lebih sesuai sepakbola
+   - Saat kick-off awal dan setelah gol, semua pemain diposisikan di area sendiri.
+   - Tidak ada pemain yang sudah melewati garis tengah sebelum bola dimainkan.
+   - Bola kick-off/restart tetap diberikan ke pemain penyerang terbaik.
+
+3. Waktu gameplay dipercepat dan distabilkan
+   - Match realtime memakai rasio sekitar 1 menit game = 15 detik real-time.
+   - Gameplay tidak terasa menunggu per 1 detik lambat, tapi tetap halus karena tick frame masih cepat.
+   - Clock sekarang mendukung extra time sampai 120 menit.
+
+4. Tombol surrender
+   - Ada tombol Surrender.
+   - Jika ditekan, user langsung kalah 0-3.
+   - Result tetap masuk ke sistem season/kompetisi.
+
+5. Substitution dibatasi 3 pemain
+   - Pergantian pemain kini maksimal 3 per tim per pertandingan.
+   - Berlaku untuk gameplay realtime, quick sim, dan sistem substitution lama.
+   - UI modal ganti pemain menampilkan 0/3, 1/3, 2/3, 3/3.
+
+6. Stamina gameplay
+   - Setiap pemain di pitch sekarang punya bar stamina/energy kecil.
+   - Stamina memengaruhi speed, sprint, on-ball movement, tackle, dan risiko cedera.
+   - Pemain dengan stamina rendah lebih lambat dan lebih rentan duel buruk.
+
+Update Quick Sim:
+1. Tombol Main Simulate di Pre-Match
+   - Di sebelah tombol Mulai Main sekarang ada tombol Main Simulate.
+   - Simulate menjalankan pertandingan oleh AI dengan cuplikan cepat.
+
+2. Cuplikan cepat dari waktu ke waktu
+   - Simulate menampilkan gol, shot, save, kartu, cedera parah, dan pergantian pemain.
+   - Ada panel Progress Aksi Berikutnya untuk memberi info aksi lawan/tim yang akan terjadi.
+   - Ada timeline live highlight.
+
+3. User bisa pause dan ganti pemain
+   - Quick Sim bisa dipause.
+   - Saat pause, user bisa membuka modal ganti pemain.
+   - Setelah ganti pemain, user bisa lanjut sim.
+   - Pergantian tetap maksimal 3.
+
+4. Stamina di simulate
+   - Ada panel stamina tim user dan lawan.
+   - Energy pemain turun selama simulate.
+   - Simulate bisa melakukan pergantian otomatis untuk menjaga stamina.
+
+Extra Time & Penalty:
+- Laga penting seperti Semi Final, Final, Grand Final, dan kompetisi knockout/championship sekarang mendukung Extra Time.
+- Jika laga penting imbang pada 90 menit, masuk Extra Time sampai 120 menit.
+- Jika masih imbang setelah Extra Time, masuk penalty shootout.
+- Penalty winner diberi tanda dan result tidak buntu di bracket kompetisi.
+
+Responsive/mobile:
+- Tombol quick sim, surrender, ganti pemain, HUD bola in/out, stamina bar, dan modal substitution tetap responsive.
+- Layout Quick Sim berubah menjadi satu kolom di mobile.
+- Gameplay tetap disarankan landscape, tetapi portrait tidak dipaksa desktop.

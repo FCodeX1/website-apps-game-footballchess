@@ -1,0 +1,11 @@
+FIX V10.1 - Runtime Gameplay
+
+- Memperbaiki ReferenceError: rtMoveToward is not defined.
+- Menambahkan kembali helper realtime penting:
+  1. rtMoveToward()
+  2. rtSpeed()
+  3. rtResolveSpacing()
+- Tick realtime soccer sekarang punya fungsi gerak pemain yang lengkap.
+- Resolver spacing antar pemain kembali aktif agar pemain tidak terlalu menumpuk.
+- Sinkronisasi posisi realtime rx/ry ke grid x/y kembali diamankan.
+- Build test berhasil dengan npm run build.

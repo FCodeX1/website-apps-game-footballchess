@@ -1,0 +1,52 @@
+UPDATE BESAR V8 - REAL-TIME FOOTBALL GAMEPLAY
+
+Fokus update:
+Gameplay utama sudah dirombak dari AP/grid turn-based menjadi mode real-time football.
+
+Yang berubah:
+1. Match sekarang berjalan otomatis real-time.
+   - Semua pemain bergerak terus tanpa menunggu giliran.
+   - Timer pertandingan berjalan otomatis.
+   - User bisa pause / lanjutkan match.
+
+2. Board grid diganti pitch bola sungguhan.
+   - Lapangan memakai koordinat bebas, bukan kotak grid sebagai aksi utama.
+   - Ada garis tengah, center circle, penalty box, dan gawang.
+   - Bola tampil sebagai objek bebas dengan physics sederhana.
+
+3. Bola punya physics.
+   - Bola bisa dikuasai pemain.
+   - Bola bisa menjadi loose ball.
+   - Pass, through ball, dan shoot memakai velocity/arah.
+   - Jika bola melewati garis gawang dan masuk area gawang, gol dihitung.
+   - Jika keluar bukan gol, sistem memberi goal kick / throw-in cepat.
+
+4. Kontrol user dibuat seperti game bola.
+   - Tap pemain milik user untuk memilih.
+   - Tap area lapangan untuk mengarahkan pemain bergerak.
+   - Tombol Sprint, Pass, Through, Shoot, dan Tackle.
+   - Auto pilih pemain terdekat bola.
+   - Target pass cepat muncul di panel kanan.
+
+5. AI bergerak otomatis.
+   - AI lawan mengejar bola, marking, pressing, tackle, passing, dribble, dan shoot.
+   - Pemain tim user yang tidak dikontrol juga ikut bergerak sesuai shape formasi.
+   - Pemain bertahan balik ke shape, pemain menyerang mencari ruang.
+
+6. Kick off dan restart setelah gol.
+   - Kick off diberikan ke pemain penyerang.
+   - Setelah gol, posisi pemain di-reset ke bentuk formasi.
+   - Bola restart diberikan ke pemain penyerang tim yang kebobolan.
+
+7. Statistik tetap tersambung.
+   - Score, shots, on target, xG, pass, tackle, possession, history, highlights, event goal tetap masuk ke hasil akhir.
+   - Finish week tetap memakai resultFromGame sehingga career, liga, kompetisi, income, berita, dan kalender tetap lanjut.
+
+8. UI mobile responsive.
+   - Match layout berubah menjadi 1 kolom di mobile.
+   - Pitch full lebar layar.
+   - Kontrol sticky di bawah agar enak dimainkan.
+   - Tombol dibuat besar dan ramah sentuh.
+
+Catatan:
+Sistem AP/grid lama masih ada di kode sebagai fallback, tutorial lama, dan kompatibilitas LAN/legacy, tetapi match career baru yang dibuat lewat createMatch otomatis memakai mode real-time soccer.

@@ -1,0 +1,65 @@
+UPDATE BESAR V10 PRO AI GAMEPLAY
+
+Fokus update:
+- Menyempurnakan gameplay real-time agar pergerakan AI tidak acak-acakan.
+- Membuat AI team-match lebih pintar seperti sepakbola sungguhan: shape, pressing, cover, support run, passing lane, dribble lane, dan shot decision.
+- Tetap mempertahankan kontrol mobile memakai virtual stick + tombol aksi seperti game bola mobile.
+
+Detail perubahan gameplay:
+1. Tick gameplay dibuat lebih halus
+   - Frame realtime dari 70ms menjadi 45ms.
+   - Simulasi tick dari 0.55s menjadi 0.28s.
+   - Gerakan pemain dan bola lebih smooth, tidak terasa loncat-loncat.
+
+2. AI shape disiplin
+   - Pemain tidak lagi semua mengejar bola.
+   - Hanya pemain paling tepat yang melakukan pressing.
+   - Pemain lain menjaga zona, cover, atau blocking passing lane.
+   - Lini belakang tidak maju/acak berlebihan.
+   - GK menjaga posisi gawang dan mengikuti arah bola secara wajar.
+
+3. AI pressing berlapis
+   - Pemain terdekat menjadi presser utama.
+   - Pemain kedua menjadi cover, berdiri di antara pembawa bola dan gawang.
+   - Pemain ketiga bisa block lane passing berbahaya.
+   - Tackling otomatis hanya aktif jika posisi masuk akal, bukan asal tabrak.
+
+4. AI support attack lebih pintar
+   - Saat tim menguasai bola, rekan setim membuat support triangle.
+   - ST/LW/RW/CAM mencari ruang maju.
+   - CM/CDM menyediakan opsi aman di belakang bola.
+   - Wing dan fullback tetap menjaga lane agar tidak semua lari ke tengah.
+   - Pemain menjaga offside-like line supaya tidak terlalu jauh melewati bek.
+
+5. Passing decision diperbaiki
+   - AI membaca risiko passing lane.
+   - AI menilai jarak, posisi depan, marking lawan, kualitas penerima, dan posisi menuju gawang.
+   - Through ball hanya dipilih saat lane cukup aman dan penerima punya ruang.
+   - Passing ke pemain yang tertutup lawan dikurangi.
+
+6. Dribble decision diperbaiki
+   - AI tidak lagi membawa bola secara random ke pojok.
+   - AI memilih dari beberapa jalur dribble, lalu mengambil lane yang paling kosong.
+   - Role winger tetap cenderung melebar, ST/CAM lebih mencari tengah.
+   - Ada penalti kalau terlalu dekat sideline.
+
+7. Shot decision diperbaiki
+   - AI membaca jarak, sudut, tekanan lawan, posisi kiper, dan blocking lane.
+   - Tembakan tidak dilakukan asal dari posisi buruk.
+   - Kalau shot lane tertutup, AI lebih memilih oper atau dribble cari ruang.
+
+8. Loose ball diperbaiki
+   - Saat bola liar, hanya pemain terdekat tiap tim mengejar bola.
+   - Pemain lain menutup second ball, bukan ikut bergerombol.
+
+9. User control dipertahankan
+   - Pemain yang dikontrol user tidak lagi diambil alih AI.
+   - Kalau stick diam, pemain hanya menjaga momentum kecil.
+   - Tombol Skill, Pass, Through, Shoot, Tackle, Sprint tetap aktif.
+
+10. UI label diperbarui
+   - Match sekarang memakai label Real-Time Football v10 Pro AI.
+   - Help text disesuaikan agar user paham AI sudah memakai shape, support, pressing, dan shot decision baru.
+
+Build test:
+- npm run build: BERHASIL.

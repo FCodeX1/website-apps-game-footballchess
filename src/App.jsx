@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React from "react";
+const { useCallback, useEffect, useMemo, useState } = React;
 
 const MY_TEAM_ID = 1;
 const BOARD_ROWS = 14;
@@ -726,7 +727,20 @@ const ROLE_SKILL_DESCS = {
   ST: "ST: finishing, first-touch shot, dan poacher run.",
 };
 const MATCH_CLOCK_SECONDS = 90 * 60;
+const EXTRA_TIME_CLOCK_SECONDS = 120 * 60;
 const REALTIME_TICK_SECONDS = 10;
+const REAL_SOCCER_FRAME_MS = 33;
+// v14: fisik pemain tetap halus per frame, tetapi clock match dipercepat: 1 menit game = ±1 detik real-time.
+const REAL_SOCCER_TICK_SECONDS = Number(((REAL_SOCCER_FRAME_MS / 1000) * 4).toFixed(3));
+const REAL_SOCCER_CLOCK_SECONDS = Number(((REAL_SOCCER_FRAME_MS / 1000) * 60).toFixed(3));
+const QUICK_SIM_TICK_SECONDS = 180;
+const QUICK_SIM_FRAME_MS = 520;
+const SUBSTITUTION_LIMIT = 3;
+const RT_STICK_DEADZONE = 0.075;
+const RT_STICK_SPRINT_ZONE = 0.72;
+const FIELD_W = 100;
+const FIELD_H = 64;
+const GOAL_W = 18;
 
 
 const TRAITS = [
@@ -1006,9 +1020,10 @@ function trapInfo(game, piece) {
   return { level, trapped, crowded, passPenalty, label, enemiesNear, openAdjacent };
 }
 function formatClock(game) {
-  const seconds = clamp(Math.floor(game?.clockSeconds || 0), 0, MATCH_CLOCK_SECONDS);
-  const m = Math.min(90, Math.floor(seconds / 60));
-  const s = seconds >= MATCH_CLOCK_SECONDS ? 0 : seconds % 60;
+  const max = matchMaxSeconds(game);
+  const seconds = clamp(Math.floor(game?.clockSeconds || 0), 0, max);
+  const m = Math.min(Math.round(max / 60), Math.floor(seconds / 60));
+  const s = seconds >= max ? 0 : seconds % 60;
   return `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
 }
 
@@ -1385,10 +1400,14 @@ function createMatch({ homeTeam, awayTeam, userSide, userFormation, trainingPlan
     history: [{ minute: 1, icon: isDerby ? "🔥" : "⚽", text: isDerby ? `Derby panas: ${homeTeam.name} vs ${awayTeam.name}.` : `Kick off ${homeTeam.name}.` }],
     events: [],
   };
-  return applyAutoShape(game);
+  return makeRealtimeSoccerGame(applyAutoShape(game));
 }
 function emptyStats() { return { shots: 0, onTarget: 0, goals: 0, passes: 0, passOk: 0, tackles: 0, tackleOk: 0, fouls: 0, yellows: 0, reds: 0, corners: 0, offsides: 0, possession: 0, injuries: 0, xg: 0 }; }
-function minuteOf(game) { return Math.min(90, Math.max(1, Math.floor(((game.clockSeconds ?? ((game.actionNo / game.maxActions) * MATCH_CLOCK_SECONDS)) / 60)) + 1)); }
+function matchMaxSeconds(game) { return game?.matchMaxSeconds || MATCH_CLOCK_SECONDS; }
+function minuteOf(game) {
+  const maxMinute = Math.round(matchMaxSeconds(game) / 60);
+  return Math.min(maxMinute, Math.max(1, Math.floor(((game.clockSeconds ?? ((game.actionNo / game.maxActions) * matchMaxSeconds(game))) / 60)) + 1));
+}
 function getPiece(game, id) { return game.pieces.find((p) => p.id === id) || null; }
 function pieceAt(game, x, y) { return game.pieces.find((p) => p.x === x && p.y === y && !p.red) || null; }
 function sideStyle(game, side) { return side === "home" ? game.homeStyle : game.awayStyle; }
@@ -1886,7 +1905,7 @@ function appendLog(game, icon, text, event = null) {
 
 function advanceMatchClock(game, seconds = REALTIME_TICK_SECONDS) {
   if (!game || game.ended || game.goalPause) return game;
-  game.clockSeconds = clamp((game.clockSeconds || 0) + seconds, 0, MATCH_CLOCK_SECONDS);
+  game.clockSeconds = clamp((game.clockSeconds || 0) + seconds, 0, matchMaxSeconds(game));
   recoverMinorInjuries(game);
   finishIfNeeded(game);
   return game;
@@ -1917,16 +1936,49 @@ function switchTurn(game) {
   applyAutoShape(game);
   finishIfNeeded(game);
 }
-function finishIfNeeded(game) {
-  const clockOver = (game.clockSeconds || 0) >= MATCH_CLOCK_SECONDS;
-  if (game.actionNo > game.maxActions || clockOver) {
-    if (game.ended) return true;
-    game.clockSeconds = MATCH_CLOCK_SECONDS;
-    game.ended = true;
-    game.winner = game.score.home === game.score.away ? "draw" : game.score.home > game.score.away ? "home" : "away";
-    appendLog(game, "🏁", `Full time: ${game.homeName} ${game.score.home}-${game.score.away} ${game.awayName}.`);
-    return true;
+function avgOverall(list = []) { return list.length ? list.reduce((sum, p) => sum + (p.overall || 55), 0) / list.length : 55; }
+function isImportantEliminationGame(game) {
+  const stage = String(game?.stage || "").toLowerCase();
+  const comp = String(game?.competition || "league").toLowerCase();
+  return comp !== "league" && /(semi|final|grand|penentu|knock|cup|championship)/i.test(`${stage} ${game?.cupName || ""}`);
+}
+function resolvePenaltyShootout(game) {
+  const homePower = avgOverall(game.pieces.filter((p) => p.side === "home" && p.role !== "GK"));
+  const awayPower = avgOverall(game.pieces.filter((p) => p.side === "away" && p.role !== "GK"));
+  let homePens = 0; let awayPens = 0;
+  for (let i = 0; i < 5; i += 1) {
+    if (roll(clamp(70 + (homePower - awayPower) * 0.18 + rng(-8, 8), 52, 88))) homePens += 1;
+    if (roll(clamp(70 + (awayPower - homePower) * 0.18 + rng(-8, 8), 52, 88))) awayPens += 1;
   }
+  while (homePens === awayPens) {
+    if (roll(72)) homePens += 1;
+    if (roll(72)) awayPens += 1;
+  }
+  const winner = homePens > awayPens ? "home" : "away";
+  game.penalty = { home: homePens, away: awayPens, winner };
+  game.score[winner] += 1; // penanda pemenang supaya bracket/kompetisi tidak buntu saat skor seri.
+  appendLog(game, "🎯", `Drama penalti: ${game.homeName} ${homePens}-${awayPens} ${game.awayName}. ${winner === "home" ? game.homeName : game.awayName} lolos.`, { type: "penalty", side: winner, team: winner === "home" ? game.homeName : game.awayName });
+}
+function finishMatchWithExtraTime(game, label = "Full time") {
+  if (game.ended) return true;
+  const tied = game.score.home === game.score.away;
+  if (tied && isImportantEliminationGame(game) && !game.extraTimeStarted) {
+    game.extraTimeStarted = true;
+    game.matchMaxSeconds = EXTRA_TIME_CLOCK_SECONDS;
+    game.clockSeconds = MATCH_CLOCK_SECONDS;
+    appendLog(game, "⏱️", `${label}: skor imbang. Laga penting masuk Extra Time 30 menit.`);
+    return false;
+  }
+  if (tied && isImportantEliminationGame(game) && game.extraTimeStarted && !game.penalty) resolvePenaltyShootout(game);
+  game.clockSeconds = matchMaxSeconds(game);
+  game.ended = true;
+  game.winner = game.score.home === game.score.away ? "draw" : game.score.home > game.score.away ? "home" : "away";
+  appendLog(game, "🏁", `${game.extraTimeStarted ? "AET" : label}: ${game.homeName} ${game.score.home}-${game.score.away} ${game.awayName}${game.penalty ? ` · Pens ${game.penalty.home}-${game.penalty.away}` : ""}.`);
+  return true;
+}
+function finishIfNeeded(game) {
+  const clockOver = (game.clockSeconds || 0) >= matchMaxSeconds(game);
+  if (game.actionNo > game.maxActions || clockOver) return finishMatchWithExtraTime(game, "Full time");
   return false;
 }
 function resetAfterGoal(game, scorerSide) {
@@ -1948,6 +2000,1388 @@ function resetAfterGoal(game, scorerSide) {
   game.highlights = [{ minute: minuteOf(game), icon: "🥅", text: game.lastAction, score: { ...game.score } }, ...(game.highlights || [])].slice(0, 12);
   game.actionNo += 1;
 }
+
+// ── REAL SOCCER MODE ────────────────────────────────────────────────────────
+function clampFieldX(x) { return clamp(Number.isFinite(x) ? x : FIELD_W / 2, 2, FIELD_W - 2); }
+function clampFieldY(y) { return clamp(Number.isFinite(y) ? y : FIELD_H / 2, 2, FIELD_H - 2); }
+function gridToFieldX(x) { return clampFieldX(4 + (Number(x) / Math.max(1, BOARD_COLS - 1)) * (FIELD_W - 8)); }
+function gridToFieldY(y) { return clampFieldY(3 + (Number(y) / Math.max(1, BOARD_ROWS - 1)) * (FIELD_H - 6)); }
+function goalCenterX() { return FIELD_W / 2; }
+function goalX1() { return FIELD_W / 2 - GOAL_W / 2; }
+function goalX2() { return FIELD_W / 2 + GOAL_W / 2; }
+function sideGoalY(side) { return side === "home" ? 0 : FIELD_H; }
+function sideOwnGoalY(side) { return side === "home" ? FIELD_H : 0; }
+function rtDist(a, b) { const dx = (a?.rx ?? a?.x ?? 0) - (b?.rx ?? b?.x ?? 0); const dy = (a?.ry ?? a?.y ?? 0) - (b?.ry ?? b?.y ?? 0); return Math.hypot(dx, dy); }
+function rtBallDist(piece, ball) { return Math.hypot((piece?.rx || 0) - (ball?.x || 0), (piece?.ry || 0) - (ball?.y || 0)); }
+function rtAlive(game, p) { return p && !p.red && !p.vacant && !pieceTemporarilyOut(game, p); }
+function rtTeam(game, side) { return (game.pieces || []).filter((p) => rtAlive(game, p) && p.side === side); }
+function rtOpponent(game, side) { return (game.pieces || []).filter((p) => rtAlive(game, p) && p.side !== side); }
+function rtRoleRank(role) { return ({ ST: 90, LW: 78, RW: 78, CAM: 68, LM: 55, RM: 55, CM: 46, CDM: 36, LB: 24, RB: 24, CB: 14, GK: 0 })[role] || 30; }
+function rtXFromBoard(slotX) { return clamp(8 + (Number(slotX || 0) / Math.max(1, BOARD_COLS - 1)) * 84, 5, 95); }
+function rtYFromRole(role, side, lineIndex = 0) {
+  // Kick-off/restart selalu seperti sepakbola asli: semua pemain masih di area sendiri,
+  // tidak ada attacker yang sudah melewati garis tengah sebelum bola dimainkan.
+  const home = { GK: 58, CB: 51, LB: 50, RB: 50, CDM: 45, CM: 40, LM: 39, RM: 39, CAM: 36, LW: 35, RW: 35, ST: 34 };
+  const raw = home[role] ?? (42 - lineIndex * 1.2);
+  const y = side === "home" ? Math.max(FIELD_H / 2 + 1.4, raw) : Math.min(FIELD_H / 2 - 1.4, FIELD_H - raw);
+  return clampFieldY(y);
+}
+function rtFormationFieldSlots(formation, side) {
+  const raw = FORMATIONS[formation] || FORMATIONS["4-3-3"];
+  const counts = {};
+  return raw.map(([pos, x], idx) => {
+    counts[pos] = (counts[pos] || 0) + 1;
+    const xBase = pos === "GK" ? 50 : rtXFromBoard(x);
+    const yBase = rtYFromRole(pos, side, idx);
+    const laneNudge = ({ LW: -2.5, LM: -1.8, LB: -1.2, RW: 2.5, RM: 1.8, RB: 1.2, ST: counts[pos] === 2 ? (xBase < 50 ? -3 : 3) : 0, CB: counts[pos] === 2 ? (xBase < 50 ? -2 : 2) : 0 })[pos] || 0;
+    return { pos, x: clampFieldX(xBase + laneNudge), y: clampFieldY(yBase), slotIndex: idx };
+  });
+}
+function rtSideDir(side) { return side === "home" ? -1 : 1; }
+function rtSanitizeStick(stick = {}) {
+  const x = Number.isFinite(stick.x) ? clamp(stick.x, -1, 1) : 0;
+  const y = Number.isFinite(stick.y) ? clamp(stick.y, -1, 1) : 0;
+  const mag = Number.isFinite(stick.mag) ? clamp(stick.mag, 0, 1) : clamp(Math.hypot(x, y), 0, 1);
+  if (mag < RT_STICK_DEADZONE) return { x: 0, y: 0, mag: 0 };
+  const len = Math.max(0.001, Math.hypot(x, y));
+  return { x: (x / len) * mag, y: (y / len) * mag, mag };
+}
+function rtStickFor(game, pieceId = null) {
+  const stick = rtSanitizeStick(game?.rt?.stick || {});
+  if (!stick.mag) return stick;
+  if (pieceId && game?.rt?.stick?.pieceId && String(game.rt.stick.pieceId) !== String(pieceId)) return { x: 0, y: 0, mag: 0 };
+  return stick;
+}
+function rtStickDirectionForAction(game, piece) {
+  const stick = rtStickFor(game, piece?.id);
+  if (stick.mag >= RT_STICK_DEADZONE) return stick;
+  if (!piece) return { x: 0, y: rtSideDir(game?.userSide || "home"), mag: 0 };
+  return { x: 0, y: rtSideDir(piece.side), mag: 0 };
+}
+function rtDotDir(ax, ay, bx, by) {
+  const al = Math.max(0.001, Math.hypot(ax, ay));
+  const bl = Math.max(0.001, Math.hypot(bx, by));
+  return (ax / al) * (bx / bl) + (ay / al) * (by / bl);
+}
+function rtBlendTarget(piece, raw, strength = 0.38) {
+  if (!piece || !raw) return { x: piece?.rx ?? FIELD_W / 2, y: piece?.ry ?? FIELD_H / 2 };
+  const currentX = piece.targetX ?? piece.rx ?? raw.x;
+  const currentY = piece.targetY ?? piece.ry ?? raw.y;
+  const jump = Math.hypot(raw.x - currentX, raw.y - currentY);
+  const adaptive = clamp(strength + Math.min(0.22, jump / 90), 0.14, 0.92);
+  piece.targetX = clampFieldX(currentX * (1 - adaptive) + raw.x * adaptive);
+  piece.targetY = clampFieldY(currentY * (1 - adaptive) + raw.y * adaptive);
+  return { x: piece.targetX, y: piece.targetY };
+}
+function rtStyleDepthMod(game, side, phase = "attack") {
+  const style = sideStyle(game, side);
+  if (style === "Counter") return phase === "attack" ? 4.8 : -1.5;
+  if (style === "Long Ball") return phase === "attack" ? 5.5 : -1.2;
+  if (style === "High Press" || style === "Gegenpress") return phase === "attack" ? 2.8 : 4.2;
+  if (style === "Park Bus" || style === "Catenaccio") return phase === "attack" ? -2.4 : -5.5;
+  if (style === "Vertical Tiki Taka") return phase === "attack" ? 3.3 : 1.2;
+  return 0;
+}
+function rtStyleWidthMod(game, side) {
+  const profile = styleProfile(game, side);
+  return clamp((profile?.width || 0) * 0.42, -7.5, 9.5);
+}
+function rtRoleDiscipline(piece) {
+  if (!piece) return 0.5;
+  if (["CB", "GK"].includes(piece.role)) return 0.86;
+  if (["LB", "RB", "CDM"].includes(piece.role)) return 0.76;
+  if (["CM", "LM", "RM"].includes(piece.role)) return 0.62;
+  if (["CAM"].includes(piece.role)) return 0.48;
+  return 0.38;
+}
+function rtRoleBand(side, role, phase = "neutral") {
+  const homeBands = {
+    GK: [54, 62], CB: [44, 57], LB: [42, 56], RB: [42, 56], CDM: [37, 50], CM: [30, 47], LM: [29, 47], RM: [29, 47],
+    CAM: [20, 42], LW: [16, 40], RW: [16, 40], ST: [10, 38],
+  };
+  const band = homeBands[role] || [24, 48];
+  let [minY, maxY] = side === "home" ? band : [FIELD_H - band[1], FIELD_H - band[0]];
+  if (phase === "attack") { minY -= side === "home" ? 7 : 0; maxY += side === "away" ? 7 : 0; }
+  if (phase === "defend") { minY += side === "home" ? 4 : -4; maxY += side === "home" ? 4 : -4; }
+  return [clampFieldY(Math.min(minY, maxY)), clampFieldY(Math.max(minY, maxY))];
+}
+function rtRoleWidthAnchor(piece) {
+  const role = piece?.role;
+  if (["LW", "LM", "LB"].includes(role)) return 18;
+  if (["RW", "RM", "RB"].includes(role)) return 82;
+  if (["LCB", "RCB"].includes(role)) return piece.homeX || 50;
+  if (["ST", "CAM", "CDM", "CM"].includes(role)) return clamp(piece.homeX || 50, 35, 65);
+  return piece?.homeX ?? 50;
+}
+function rtTeamShapeTarget(game, piece, raw, carrier) {
+  if (!piece || !raw || piece.role === "GK" || rtIsManuallyControlled(game, piece)) return raw;
+  const phase = rtShapePhase(game, piece.side, carrier);
+  const style = styleProfile(game, piece.side);
+  const ball = game.ball || { x: FIELD_W / 2, y: FIELD_H / 2 };
+  const dir = rtSideDir(piece.side);
+  let x = raw.x;
+  let y = raw.y;
+  const [minY, maxY] = rtRoleBand(piece.side, piece.role, phase);
+  y = clamp(y, minY, maxY);
+  const anchorX = rtRoleWidthAnchor(piece);
+  const width = rtStyleWidthMod(game, piece.side);
+  const line = rtRoleLine(piece.role);
+  const horizontalShift = clamp((ball.x - FIELD_W / 2) * (line === "back" ? 0.10 : line === "mid" ? 0.16 : 0.22), -9, 9);
+  const styleWide = ["LW", "LM", "LB"].includes(piece.role) ? -Math.max(0, width) : ["RW", "RM", "RB"].includes(piece.role) ? Math.max(0, width) : 0;
+  const anchorWeight = line === "back" ? 0.34 : line === "mid" ? 0.24 : 0.16;
+  x = x * (1 - anchorWeight) + clampFieldX(anchorX + horizontalShift + styleWide) * anchorWeight;
+  const compact = style?.block ? 0.30 : sideStyle(game, piece.side) === "Gegenpress" ? 0.16 : 0.22;
+  if (phase === "defend" || phase === "press") {
+    const lineHomeY = piece.homeY ?? y;
+    y = y * (1 - compact) + clampFieldY(lineHomeY + (ball.y - FIELD_H / 2) * 0.10) * compact;
+  }
+  const mates = rtTeam(game, piece.side).filter((m) => m.id !== piece.id && m.role !== "GK" && rtAlive(game, m));
+  let pushX = 0; let pushY = 0;
+  mates.forEach((m) => {
+    const dx = x - (m.targetX ?? m.rx);
+    const dy = y - (m.targetY ?? m.ry);
+    const d = Math.hypot(dx, dy) || 0.1;
+    if (d < 6.4) { const force = (6.4 - d) / 6.4; pushX += (dx / d) * force * 2.6; pushY += (dy / d) * force * 1.7; }
+  });
+  x = clampFieldX(x + pushX);
+  y = clamp(y + pushY, minY, maxY);
+  if (["CB", "LB", "RB", "CDM"].includes(piece.role) && carrier?.side === piece.side && rtProgressToGoal(piece.side, carrier.ry) < 0.48) {
+    y = y * 0.78 + (piece.homeY ?? y) * 0.22;
+  }
+  if (phase === "attack" && ["ST", "LW", "RW", "CAM"].includes(piece.role)) y = rtClampSmartY(game, piece.side, piece.role, y, "attack");
+  return { x: clampFieldX(x), y: clampFieldY(y) };
+}
+function rtPassDecisionBias(game, carrier, passTarget, shot) {
+  const style = styleProfile(game, carrier.side);
+  if (!passTarget) return -99;
+  const risk = rtPassLaneRisk(game, carrier, passTarget);
+  const forward = rtForwardAmount(carrier.side, carrier.ry, passTarget.ry);
+  const support = (style?.support || 0) * 0.20 + (style?.through || 0) * (forward > 6 ? 0.45 : 0.12) + (style?.risk || 0) * 0.16;
+  const pressure = rtOpponent(game, carrier.side).filter((e) => rtDist(e, carrier) < 8).length * 4;
+  const shotPull = shot?.can ? shot.chance * 0.18 : 0;
+  return passTarget.overall * 0.08 + forward * 0.42 + support + pressure - risk * 0.55 - shotPull;
+}
+function rtIsManuallyControlled(game, p) {
+  return Boolean(p && p.side === game?.userSide && String(p.id) === String(game?.rt?.selectedId));
+}
+function rtManualMoveTarget(game, piece, stick = rtStickFor(game, piece?.id)) {
+  if (!piece || !stick.mag) return null;
+  const reach = 7.2 + stick.mag * 4.6;
+  return { x: clampFieldX(piece.rx + stick.x * reach), y: clampFieldY(piece.ry + stick.y * reach) };
+}
+function rtReceiverLead(game, from, teammate, through = false) {
+  if (!from || !teammate) return { x: teammate?.rx || 50, y: teammate?.ry || 32 };
+  const dir = rtSideDir(from.side);
+  const runForward = Math.max(0, rtForwardAmount(from.side, from.ry, teammate.ry));
+  const lead = through ? clamp(7 + runForward * 0.18 + (teammate.pace || 60) / 35, 6, 13) : clamp(runForward * 0.06, 0, 2.8);
+  return { x: clampFieldX(teammate.rx + (through ? (teammate.rx - from.rx) * 0.16 : 0)), y: clampFieldY(teammate.ry + dir * lead) };
+}
+function rtShotTargetFromStick(game, piece, stick = rtStickDirectionForAction(game, piece)) {
+  const goalY = sideGoalY(piece.side);
+  const aimX = stick.mag ? stick.x : 0;
+  const inside = clamp(goalCenterX() + aimX * (GOAL_W * 0.62), goalX1() + 1, goalX2() - 1);
+  return { x: inside, y: piece.side === "home" ? -5 : FIELD_H + 5 };
+}
+function rtAttackGoalY(side) { return side === "home" ? 0 : FIELD_H; }
+function rtOwnGoalY(side) { return side === "home" ? FIELD_H : 0; }
+function rtForwardAmount(side, fromY, toY) { return (toY - fromY) * rtSideDir(side); }
+function rtProgressToGoal(side, y) { return side === "home" ? (FIELD_H - y) / FIELD_H : y / FIELD_H; }
+function rtRoleLine(role) {
+  if (role === "GK") return "keeper";
+  if (["CB", "LB", "RB"].includes(role)) return "back";
+  if (["CDM", "CM", "LM", "RM"].includes(role)) return "mid";
+  if (["CAM"].includes(role)) return "creator";
+  return "front";
+}
+function rtPointToSegmentDistance(point, a, b) {
+  const ax = a.rx ?? a.x ?? 0, ay = a.ry ?? a.y ?? 0;
+  const bx = b.rx ?? b.x ?? 0, by = b.ry ?? b.y ?? 0;
+  const px = point.rx ?? point.x ?? 0, py = point.ry ?? point.y ?? 0;
+  const vx = bx - ax, vy = by - ay;
+  const len2 = vx * vx + vy * vy || 1;
+  const t = clamp(((px - ax) * vx + (py - ay) * vy) / len2, 0, 1);
+  const sx = ax + vx * t, sy = ay + vy * t;
+  return Math.hypot(px - sx, py - sy);
+}
+function rtPassLaneRisk(game, from, to) {
+  if (!from || !to) return 99;
+  const dist = Math.max(1, rtDist(from, to));
+  const enemies = rtOpponent(game, from.side);
+  return enemies.reduce((risk, e) => {
+    const laneD = rtPointToSegmentDistance(e, from, to);
+    if (laneD > 8.5) return risk;
+    const along = (((e.rx - from.rx) * (to.rx - from.rx) + (e.ry - from.ry) * (to.ry - from.ry)) / (dist * dist));
+    if (along <= 0.02 || along >= 1.02) return risk;
+    const anticipation = (e.defend || 60) / 95;
+    return risk + (8.5 - laneD) * (1.2 + anticipation) + (along > 0.18 && along < 0.86 ? 4 : 0);
+  }, 0);
+}
+function rtShotLaneRisk(game, shooter) {
+  const target = { rx: goalCenterX(), ry: rtAttackGoalY(shooter.side) };
+  return rtOpponent(game, shooter.side).filter((e) => e.role !== "GK").reduce((risk, e) => {
+    const d = rtPointToSegmentDistance(e, shooter, target);
+    const ahead = rtForwardAmount(shooter.side, shooter.ry, e.ry) > 0;
+    return risk + (ahead && d < 6 ? (6 - d) * 3 : 0);
+  }, 0);
+}
+function rtOffsideLimit(game, side) {
+  const defenders = rtOpponent(game, side).filter((p) => p.role !== "GK").map((p) => p.ry).sort((a, b) => side === "home" ? a - b : b - a);
+  const line = defenders[1] ?? defenders[0] ?? FIELD_H / 2;
+  return side === "home" ? line + 2.2 : line - 2.2;
+}
+function rtClampSmartY(game, side, role, y, phase) {
+  let out = y;
+  if (["ST", "LW", "RW", "CAM"].includes(role) && phase === "attack") {
+    const off = rtOffsideLimit(game, side);
+    out = side === "home" ? Math.max(out, off) : Math.min(out, off);
+  }
+  if (side === "home") return clampFieldY(clamp(out, phase === "attack" ? 7 : 14, FIELD_H - 3.5));
+  return clampFieldY(clamp(out, 3.5, phase === "attack" ? FIELD_H - 7 : FIELD_H - 14));
+}
+function rtShapePhase(game, side, carrier) {
+  if (!carrier) return "loose";
+  if (carrier.side === side) return "attack";
+  const ballY = game.ball?.y ?? FIELD_H / 2;
+  const danger = side === "home" ? ballY > FIELD_H * 0.50 : ballY < FIELD_H * 0.50;
+  return danger ? "defend" : "press";
+}
+function rtClampTeamHalf(side, y, phase, role) {
+  if (["ST", "LW", "RW", "CAM"].includes(role) && phase === "attack") return clampFieldY(y);
+  if (side === "home") return clamp(y, phase === "attack" ? 7 : 16, FIELD_H - 3.5);
+  return clamp(y, 3.5, phase === "attack" ? FIELD_H - 7 : FIELD_H - 16);
+}
+
+function rtResolveSpacing(game) {
+  const minD = 3.35;
+  ["home", "away"].forEach((side) => {
+    const team = rtTeam(game, side).filter((p) => p.role !== "GK");
+    for (let loop = 0; loop < 3; loop += 1) {
+      for (let i = 0; i < team.length; i += 1) {
+        for (let j = i + 1; j < team.length; j += 1) {
+          const a = team[i];
+          const b = team[j];
+          if (!rtAlive(game, a) || !rtAlive(game, b)) continue;
+          const dx = b.rx - a.rx;
+          const dy = b.ry - a.ry;
+          const d = Math.hypot(dx, dy) || 0.1;
+          if (d >= minD) continue;
+          const push = (minD - d) * 0.36;
+          const ux = dx / d;
+          const uy = dy / d;
+          if (game.ballOwnerId !== a.id && !(a.manualUntil && a.manualUntil > rtLiveNow(game))) {
+            a.rx = clampFieldX(a.rx - ux * push);
+            a.ry = clampFieldY(a.ry - uy * push);
+          }
+          if (game.ballOwnerId !== b.id && !(b.manualUntil && b.manualUntil > rtLiveNow(game))) {
+            b.rx = clampFieldX(b.rx + ux * push);
+            b.ry = clampFieldY(b.ry + uy * push);
+          }
+        }
+      }
+    }
+  });
+  (game.pieces || []).forEach((p) => {
+    if (!rtAlive(game, p)) return;
+    p.rx = clampFieldX(p.rx ?? gridToFieldX(p.x));
+    p.ry = clampFieldY(p.ry ?? gridToFieldY(p.y));
+    p.x = clamp(Math.round(((p.rx - 4) / (FIELD_W - 8)) * (BOARD_COLS - 1)), 0, BOARD_COLS - 1);
+    p.y = clamp(Math.round(((p.ry - 3) / (FIELD_H - 6)) * (BOARD_ROWS - 1)), 0, BOARD_ROWS - 1);
+  });
+}
+function rtSpeed(piece, sprint = false, onBall = false) {
+  const pace = piece?.pace || 60;
+  const energy = piece?.energy ?? 80;
+  const stamina = piece?.stamina || 70;
+  const base = 0.42 + pace / 185 + energy / 520 + stamina / 840;
+  const roleBalance = piece?.role === "GK" ? 0.76 : ["CB", "CDM"].includes(piece?.role) ? 0.94 : ["LW", "RW", "ST"].includes(piece?.role) ? 1.05 : 1;
+  const ballControl = onBall ? 0.88 + (piece?.dribble || 60) / 520 : 1;
+  return base * roleBalance * (sprint ? 1.42 : 1) * ballControl * (piece?.minorInjury ? 0.55 : 1);
+}
+function rtLiveNow(game) { return game?.rt?.liveSeconds ?? 0; }
+function rtLiveUntil(game, extra = 0) { return rtLiveNow(game) + extra; }
+function rtMoveToward(piece, tx, ty, dt, sprint = false, onBall = false) {
+  if (!piece || piece.red || piece.vacant) return;
+  const targetX = clampFieldX(tx);
+  const targetY = clampFieldY(ty);
+  const ox = piece.rx ?? gridToFieldX(piece.x);
+  const oy = piece.ry ?? gridToFieldY(piece.y);
+  const dx = targetX - ox;
+  const dy = targetY - oy;
+  const dist = Math.hypot(dx, dy);
+  if (dist < 0.045) {
+    piece.vx = (piece.vx || 0) * 0.68;
+    piece.vy = (piece.vy || 0) * 0.68;
+    return;
+  }
+  const speed = rtSpeed(piece, sprint, onBall);
+  const maxStep = speed * dt;
+  const desiredVx = (dx / dist) * speed;
+  const desiredVy = (dy / dist) * speed;
+  const turnSharpness = onBall ? 0.56 : (piece.role === "GK" ? 0.52 : 0.66);
+  piece.vx = (piece.vx || 0) * (1 - turnSharpness) + desiredVx * turnSharpness;
+  piece.vy = (piece.vy || 0) * (1 - turnSharpness) + desiredVy * turnSharpness;
+  const vl = Math.max(0.001, Math.hypot(piece.vx, piece.vy));
+  const step = Math.min(dist, maxStep, vl * dt);
+  piece.rx = clampFieldX(ox + (piece.vx / vl) * step);
+  piece.ry = clampFieldY(oy + (piece.vy / vl) * step);
+  if (step > 0.015) {
+    piece.faceX = piece.vx / vl;
+    piece.faceY = piece.vy / vl;
+  }
+  piece.x = clamp(Math.round(((piece.rx - 4) / (FIELD_W - 8)) * (BOARD_COLS - 1)), 0, BOARD_COLS - 1);
+  piece.y = clamp(Math.round(((piece.ry - 3) / (FIELD_H - 6)) * (BOARD_ROWS - 1)), 0, BOARD_ROWS - 1);
+  piece.energy = clamp((piece.energy ?? 80) - (sprint ? 0.22 : 0.045) * dt * (onBall ? 1.12 : 1), 0, 100);
+}
+
+function rtPressAssignment(game, piece, carrier) {
+  if (!carrier || carrier.side === piece.side || piece.role === "GK") return "zone";
+  const side = piece.side;
+  const ownGoal = { rx: goalCenterX(), ry: rtOwnGoalY(side) };
+  const pool = rtTeam(game, side).filter((p) => p.role !== "GK").map((p) => {
+    const d = rtDist(p, carrier);
+    const line = rtRoleLine(p.role);
+    const rolePenalty = line === "front" ? -2.5 : line === "mid" || line === "creator" ? 0 : 3.5;
+    const betweenBonus = rtPointToSegmentDistance(p, carrier, ownGoal) < 10 ? -2.2 : 0;
+    const wrongSide = rtForwardAmount(side, carrier.ry, p.ry) > 0 ? 4 : 0;
+    return { p, score: d + rolePenalty + wrongSide + betweenBonus - (p.defend || 60) * 0.015 };
+  }).sort((a, b) => a.score - b.score);
+  const rank = pool.findIndex((r) => r.p.id === piece.id);
+  const dist = rtDist(piece, carrier);
+  const style = styleProfile(game, side);
+  const pressBoost = clamp((style?.press || 0) * 0.62, -5, 10);
+  if (rank === 0 && dist < 30 + pressBoost) return "press";
+  if (rank === 1 && dist < 36 + pressBoost * 0.7) return "cover";
+  if (rank === 2 && rtProgressToGoal(carrier.side, carrier.ry) > 0.45) return "blockLane";
+  return "zone";
+}
+function rtMarkTarget(game, piece, carrier) {
+  if (!carrier || carrier.side === piece.side) return null;
+  const candidates = rtTeam(game, carrier.side).filter((p) => p.id !== carrier.id && p.role !== "GK").map((p) => {
+    const lane = rtPointToSegmentDistance(piece, carrier, p);
+    const threat = rtForwardAmount(carrier.side, carrier.ry, p.ry) * 0.8 + rtProgressToGoal(carrier.side, p.ry) * 16 - rtDist(piece, p) * 0.22 - lane * 0.32 + p.overall * 0.05;
+    return { p, score: threat };
+  }).sort((a, b) => b.score - a.score);
+  return candidates[0]?.p || null;
+}
+function rtSupportLaneX(piece, carrier, style) {
+  const base = piece.homeX ?? piece.rx;
+  const wide = clamp((style?.width || 0) * 0.45, -7, 7);
+  if (["LW", "LM", "LB"].includes(piece.role)) return clampFieldX(Math.min(base - 2 - Math.max(0, wide), carrier.rx - 12));
+  if (["RW", "RM", "RB"].includes(piece.role)) return clampFieldX(Math.max(base + 2 + Math.max(0, wide), carrier.rx + 12));
+  if (piece.role === "ST") return clampFieldX(base + (base < 50 ? -3 : base > 50 ? 3 : (carrier.rx < 50 ? 5 : -5)));
+  if (piece.role === "CAM") return clampFieldX(carrier.rx + (carrier.rx < 50 ? 8 : -8));
+  return clampFieldX(base + (carrier.rx - 50) * 0.12);
+}
+function rtIsDefensiveRole(role) { return ["GK", "CB", "LB", "RB"].includes(role); }
+function rtIsMidfieldRole(role) { return ["CDM", "CM", "LM", "RM", "CAM"].includes(role); }
+function rtIsForwardRole(role) { return ["ST", "LW", "RW"].includes(role); }
+function rtTeamIsAdvanced(game, side, carrier) { return Boolean(carrier && carrier.side === side && rtProgressToGoal(side, carrier.ry) >= 0.48); }
+function rtTeamIsFinalThird(game, side, carrier) { return Boolean(carrier && carrier.side === side && rtProgressToGoal(side, carrier.ry) >= 0.66); }
+function rtThreatInOwnHalf(game, side, carrier) {
+  if (!carrier || carrier.side === side) return false;
+  const ballY = carrier.ry ?? game.ball?.y ?? FIELD_H / 2;
+  return side === "home" ? ballY > FIELD_H * 0.46 : ballY < FIELD_H * 0.54;
+}
+function rtRoleLaneX(piece, carrier = null) {
+  const home = piece?.homeX ?? piece?.rx ?? 50;
+  if (["LW", "LM", "LB"].includes(piece?.role)) return clampFieldX(Math.min(24, home));
+  if (["RW", "RM", "RB"].includes(piece?.role)) return clampFieldX(Math.max(76, home));
+  if (piece?.role === "ST") return clampFieldX(home < 45 ? 42 : home > 55 ? 58 : (carrier?.rx || 50));
+  if (piece?.role === "CAM") return clampFieldX((carrier?.rx || home) + ((carrier?.rx || 50) < 50 ? 7 : -7));
+  if (["CM", "CDM"].includes(piece?.role)) return clampFieldX(home * 0.62 + (carrier?.rx || 50) * 0.38);
+  return clampFieldX(home);
+}
+function rtSpaceScore(game, piece, point, carrier) {
+  if (!piece || !point || !carrier) return -999;
+  const p = { rx: clampFieldX(point.x), ry: clampFieldY(point.y) };
+  const enemies = rtOpponent(game, piece.side);
+  const mates = rtTeam(game, piece.side).filter((m) => m.id !== piece.id && m.id !== carrier.id && m.role !== "GK");
+  const nearestEnemy = enemies.reduce((best, e) => Math.min(best, Math.hypot((e.rx || 0) - p.rx, (e.ry || 0) - p.ry)), 80);
+  const nearestMate = mates.reduce((best, m) => Math.min(best, Math.hypot((m.rx || 0) - p.rx, (m.ry || 0) - p.ry)), 80);
+  const laneRisk = rtPassLaneRisk(game, carrier, p);
+  const forward = Math.max(-8, Math.min(18, rtForwardAmount(piece.side, carrier.ry, p.ry)));
+  const progress = rtProgressToGoal(piece.side, p.ry);
+  const central = 1 - Math.abs(p.rx - goalCenterX()) / 50;
+  const wideFit = (["LW", "LM", "LB"].includes(piece.role) && p.rx < 36) || (["RW", "RM", "RB"].includes(piece.role) && p.rx > 64) ? 7 : 0;
+  const roleLine = rtRoleLine(piece.role);
+  const strikerBonus = roleLine === "front" ? progress * 15 + central * 5 : roleLine === "creator" ? progress * 9 + central * 7 : roleLine === "mid" ? progress * 5 : 0;
+  const tooCloseCarrier = rtDist({ rx: p.rx, ry: p.ry }, carrier) < 5 ? -10 : 0;
+  const offsideLimit = ["ST", "LW", "RW", "CAM"].includes(piece.role) ? rtOffsideLimit(game, piece.side) : null;
+  const offsidePenalty = offsideLimit == null ? 0 : (piece.side === "home" ? (p.ry < offsideLimit - 0.2 ? -28 : 0) : (p.ry > offsideLimit + 0.2 ? -28 : 0));
+  return nearestEnemy * 1.35 + Math.min(nearestMate, 12) * 0.7 - laneRisk * 0.82 + forward * 1.25 + strikerBonus + wideFit + tooCloseCarrier + offsidePenalty;
+}
+function rtPickBestSpace(game, piece, carrier, candidates) {
+  const valid = (candidates || [])
+    .filter(Boolean)
+    .map((c) => ({ x: clampFieldX(c.x), y: rtClampSmartY(game, piece.side, piece.role, c.y, "attack") }))
+    .map((c) => ({ ...c, score: rtSpaceScore(game, piece, c, carrier) }))
+    .sort((a, b) => b.score - a.score);
+  return valid[0] || { x: piece.homeX ?? piece.rx, y: piece.homeY ?? piece.ry };
+}
+function rtAdvancedSupportTarget(game, piece, carrier) {
+  const side = piece.side;
+  const dir = rtSideDir(side);
+  const style = sideStyle(game, side);
+  const finalThird = rtTeamIsFinalThird(game, side, carrier);
+  const depth = finalThird ? 1.25 : 1;
+  const laneX = rtRoleLaneX(piece, carrier);
+  const homeX = piece.homeX ?? piece.rx;
+  const homeY = piece.homeY ?? piece.ry;
+  const width = rtStyleWidthMod(game, side);
+  const candidates = [];
+  const add = (x, y) => candidates.push({ x: clampFieldX(x), y: clampFieldY(y) });
+  if (piece.role === "ST") {
+    add(laneX, carrier.ry + dir * (12 * depth));
+    add(goalCenterX() + (homeX < 50 ? -8 : homeX > 50 ? 8 : (carrier.rx < 50 ? 7 : -7)), carrier.ry + dir * (15 * depth));
+    add(carrier.rx + (carrier.rx < 50 ? 11 : -11), carrier.ry + dir * (10 * depth));
+  } else if (["LW", "RW"].includes(piece.role)) {
+    const wideX = piece.role === "LW" ? 16 - Math.max(0, width * 0.3) : 84 + Math.max(0, width * 0.3);
+    add(wideX, carrier.ry + dir * (9 * depth));
+    add(wideX, carrier.ry + dir * (15 * depth));
+    add(piece.role === "LW" ? 32 : 68, carrier.ry + dir * (13 * depth));
+  } else if (piece.role === "CAM") {
+    add(carrier.rx + (carrier.rx < 50 ? 9 : -9), carrier.ry - dir * 4);
+    add(goalCenterX(), carrier.ry + dir * 7);
+    add(laneX, carrier.ry - dir * 7);
+  } else if (["CM", "LM", "RM"].includes(piece.role)) {
+    const sideLane = piece.role === "LM" ? 22 : piece.role === "RM" ? 78 : laneX;
+    add(sideLane, carrier.ry - dir * 7);
+    add(carrier.rx + (homeX < carrier.rx ? -10 : 10), carrier.ry - dir * 8);
+    add(sideLane, carrier.ry + dir * (style === "Counter" || style === "Vertical Tiki Taka" ? 6 : 3));
+  } else if (piece.role === "CDM") {
+    add(carrier.rx, carrier.ry - dir * 13);
+    add(homeX * 0.72 + carrier.rx * 0.28, carrier.ry - dir * 15);
+  } else if (["LB", "RB"].includes(piece.role)) {
+    // Defender tidak ikut terlalu jauh, hanya menjadi outlet aman di belakang/tepi.
+    const sideX = piece.role === "LB" ? 18 : 82;
+    add(sideX, Math.min(Math.max(homeY + dir * 3.5, side === "home" ? FIELD_H * 0.46 : 0), side === "home" ? FIELD_H : FIELD_H * 0.54));
+    add(sideX, carrier.ry - dir * 16);
+  } else {
+    add(homeX + (carrier.rx - 50) * 0.08, homeY + dir * 1.2);
+  }
+  const chosen = rtPickBestSpace(game, piece, carrier, candidates);
+  // Midfielder dan attacker ikut naik saat bola sudah masuk zona musuh, tapi defensive line tetap aman.
+  if (!rtIsDefensiveRole(piece.role)) {
+    piece.aiRole = finalThird ? "chance-run" : "support-space";
+    return chosen;
+  }
+  piece.aiRole = "rest-defense";
+  return { x: chosen.x * 0.35 + (piece.homeX ?? chosen.x) * 0.65, y: chosen.y * 0.28 + (piece.homeY ?? chosen.y) * 0.72 };
+}
+function rtSupportTarget(game, piece, carrier) {
+  const side = piece.side;
+  const dir = rtSideDir(side);
+  const style = styleProfile(game, side);
+  const line = rtRoleLine(piece.role);
+  if (rtTeamIsAdvanced(game, side, carrier)) return rtAdvancedSupportTarget(game, piece, carrier);
+  let x = rtSupportLaneX(piece, carrier, style);
+  let y = piece.homeY ?? piece.ry;
+  const forward = rtForwardAmount(side, piece.ry, carrier.ry) < 0 ? 1 : 0;
+  const d = rtDist(piece, carrier);
+  const depthMod = rtStyleDepthMod(game, side, "attack");
+  const widthMod = rtStyleWidthMod(game, side);
+  if (["LW", "LM", "LB"].includes(piece.role)) x = clampFieldX(x - Math.max(0, widthMod));
+  if (["RW", "RM", "RB"].includes(piece.role)) x = clampFieldX(x + Math.max(0, widthMod));
+  if (line === "front") y = carrier.ry + dir * clamp(10.5 + depthMod + (piece.pace || 60) / 26, 8.5, 18.5);
+  else if (line === "creator") y = carrier.ry - dir * clamp(5.5 - depthMod * 0.25, 3.5, 8.5);
+  else if (line === "mid") y = carrier.ry - dir * clamp(d < 18 ? 8 : 4, 3, 9) + dir * depthMod * 0.25;
+  else if (line === "back") y = (piece.homeY ?? piece.ry) + dir * (sideStyle(game, side) === "Wing Play" ? 5.5 : 2.2) + dir * Math.max(0, depthMod) * 0.35;
+  if (["LB", "RB"].includes(piece.role) && ["Wing Play", "Gegenpress"].includes(sideStyle(game, side)) && Math.abs(piece.homeX - carrier.rx) < 24) y += dir * 4.2;
+  if (forward && ["CM", "CAM", "LW", "RW", "ST"].includes(piece.role)) y += dir * 2.4;
+  const discipline = rtRoleDiscipline(piece);
+  const homeAnchorY = piece.homeY ?? piece.ry;
+  y = y * (1 - discipline * 0.18) + homeAnchorY * (discipline * 0.18);
+  return { x: clampFieldX(x), y: rtClampSmartY(game, side, piece.role, y, "attack") };
+}
+function rtDefensiveTarget(game, piece, carrier) {
+  const side = piece.side;
+  const dir = rtSideDir(side);
+  const ball = game.ball || { x: FIELD_W / 2, y: FIELD_H / 2 };
+  const phase = rtShapePhase(game, side, carrier);
+  const assignment = rtPressAssignment(game, piece, carrier);
+  const ownGoal = { rx: goalCenterX(), ry: rtOwnGoalY(side) };
+  const danger = rtThreatInOwnHalf(game, side, carrier);
+  const line = rtRoleLine(piece.role);
+  piece.aiRole = assignment;
+
+  // Saat diserang, hanya 1-2 pemain melakukan pressure. Bek dan gelandang lain turun menutup ruang/pemain.
+  if (assignment === "press" && !["CB", "LB", "RB"].includes(piece.role)) {
+    const offsetX = carrier.rx > 50 ? -1.6 : 1.6;
+    const offsetY = -dir * (danger ? 1.0 : 1.4);
+    return { x: clampFieldX(carrier.rx + offsetX), y: clampFieldY(carrier.ry + offsetY) };
+  }
+  if (assignment === "cover") {
+    const coverWeight = danger ? 0.50 : 0.62;
+    return { x: clampFieldX(carrier.rx * coverWeight + ownGoal.rx * (1 - coverWeight)), y: clampFieldY(carrier.ry * coverWeight + ownGoal.ry * (1 - coverWeight)) };
+  }
+  if (assignment === "blockLane") {
+    const mark = rtMarkTarget(game, piece, carrier);
+    if (mark) return { x: clampFieldX((carrier.rx + mark.rx) / 2), y: clampFieldY((carrier.ry + mark.ry) / 2) };
+  }
+
+  let x = piece.homeX ?? piece.rx;
+  let y = piece.homeY ?? piece.ry;
+  const style = styleProfile(game, side);
+  const compactX = clamp((ball.x - FIELD_W / 2) * (0.20 + (style?.block || 0) / 145), -12, 12);
+  const depthMod = rtStyleDepthMod(game, side, "defend");
+  const mark = rtMarkTarget(game, piece, carrier);
+  const ballShiftY = clamp((ball.y - FIELD_H / 2) * 0.18, -6.5, 6.5);
+
+  if (piece.role === "CB") {
+    // CB selalu menjadi pagar antara bola dan gawang, bukan ikut chase liar.
+    x = (piece.homeX ?? x) * 0.46 + carrier.rx * 0.34 + goalCenterX() * 0.20 + compactX * 0.35;
+    y = (piece.homeY ?? y) * 0.34 + carrier.ry * 0.26 + ownGoal.ry * 0.40;
+    if (mark && rtDist(piece, mark) < 26) { x = x * 0.72 + mark.rx * 0.28; y = y * 0.72 + mark.ry * 0.28; }
+    piece.aiRole = danger ? "deep-block" : "hold-line";
+  } else if (["LB", "RB"].includes(piece.role)) {
+    const flankX = piece.role === "LB" ? clamp(ball.x, 10, 34) : clamp(ball.x, 66, 90);
+    const sideThreat = (piece.role === "LB" && ball.x < 46) || (piece.role === "RB" && ball.x > 54);
+    x = (piece.homeX ?? x) * (sideThreat ? 0.35 : 0.58) + flankX * (sideThreat ? 0.65 : 0.42);
+    y = (piece.homeY ?? y) * 0.45 + carrier.ry * 0.22 + ownGoal.ry * 0.33;
+    if (mark && ((piece.role === "LB" && mark.rx < 50) || (piece.role === "RB" && mark.rx > 50))) {
+      x = x * 0.58 + mark.rx * 0.42;
+      y = y * 0.62 + mark.ry * 0.38;
+    }
+    piece.aiRole = sideThreat ? "track-wing" : "back-four";
+  } else if (["CDM", "CM"].includes(piece.role)) {
+    // Gelandang ikut mundur: tutup pemain dan jalur operan di depan bek.
+    const screenY = carrier.ry * 0.55 + ownGoal.ry * 0.45;
+    x = (piece.homeX ?? x) * 0.32 + carrier.rx * 0.46 + goalCenterX() * 0.22 + compactX * 0.55;
+    y = (piece.homeY ?? y) * 0.25 + screenY * 0.75;
+    if (mark && rtForwardAmount(carrier.side, carrier.ry, mark.ry) > -6) {
+      const laneX = (carrier.rx + mark.rx) / 2;
+      const laneY = (carrier.ry + mark.ry) / 2;
+      x = x * 0.54 + laneX * 0.46;
+      y = y * 0.56 + laneY * 0.44;
+      piece.aiRole = "midfield-cover";
+    } else piece.aiRole = "screen-defense";
+  } else if (["LM", "RM"].includes(piece.role)) {
+    const wideX = piece.role === "LM" ? 22 : 78;
+    x = wideX * 0.48 + clampFieldX(ball.x + (piece.role === "LM" ? -5 : 5)) * 0.52;
+    y = (piece.homeY ?? y) * 0.36 + carrier.ry * 0.28 + ownGoal.ry * 0.36 + ballShiftY * 0.25;
+    piece.aiRole = "wide-track";
+  } else if (piece.role === "CAM") {
+    x = (piece.homeX ?? x) * 0.40 + carrier.rx * 0.42 + goalCenterX() * 0.18;
+    y = (piece.homeY ?? y) * 0.35 + carrier.ry * 0.42 + ownGoal.ry * 0.23;
+    piece.aiRole = danger ? "drop-press" : "shadow-six";
+  } else if (["ST", "LW", "RW"].includes(piece.role)) {
+    // Penyerang tidak ikut masuk kotak sendiri semua; mereka menutup passing outlet dan siap counter.
+    const pressY = danger ? (carrier.ry * 0.35 + (piece.homeY ?? y) * 0.65) : (carrier.ry * 0.55 + (piece.homeY ?? y) * 0.45);
+    x = (piece.homeX ?? x) * 0.58 + carrier.rx * 0.42;
+    y = pressY;
+    piece.aiRole = danger ? "counter-outlet" : "front-press";
+  } else {
+    x += compactX;
+    y += ballShiftY - dir * (danger ? 3.5 : 1.4) + dir * Math.max(0, depthMod) * 0.15;
+  }
+
+  if ((danger || phase === "defend") && ["CB", "LB", "RB", "CDM", "CM", "LM", "RM"].includes(piece.role)) {
+    // Jangan beri ruang tembak di tengah: rapatkan ke kanal bola tapi tetap ada jarak antar pemain.
+    x = x * 0.88 + clampFieldX(goalCenterX() + (carrier.rx - goalCenterX()) * 0.55) * 0.12;
+  }
+  const [minY, maxY] = rtRoleBand(side, piece.role, danger ? "defend" : phase);
+  y = clamp(y, minY, maxY);
+  return { x: clampFieldX(x), y: rtClampSmartY(game, side, piece.role, y, danger ? "defend" : phase) };
+}
+function rtPitchSlotTarget(game, piece, carrier) {
+  const side = piece.side;
+  const ball = game.ball || { x: FIELD_W / 2, y: FIELD_H / 2 };
+  const phase = rtShapePhase(game, side, carrier);
+  if (piece.role === "GK") {
+    if (rtKeeperRushActive(game, side)) return rtKeeperRushTarget(game, piece) || { x: piece.rx, y: piece.ry };
+    const ownY = rtOwnGoalY(side);
+    const dangerDepth = carrier && carrier.side !== side ? Math.max(0, 1 - Math.abs(carrier.ry - ownY) / 34) : 0;
+    const gkY = ownY + (side === "home" ? -4.8 - dangerDepth * 4.5 : 4.8 + dangerDepth * 4.5);
+    return { x: clamp(goalCenterX() + (ball.x - FIELD_W / 2) * (0.12 + dangerDepth * 0.15), 35, 65), y: clampFieldY(gkY) };
+  }
+  if (!carrier) {
+    const nearest = rtNearestToBall(game, side);
+    if (nearest?.id === piece.id) return { x: ball.x, y: ball.y };
+    return { x: piece.homeX ?? piece.rx, y: piece.homeY ?? piece.ry };
+  }
+  if (carrier.id === piece.id) return { x: piece.targetX ?? piece.rx, y: piece.targetY ?? piece.ry };
+  if (carrier.side === side) {
+    piece.aiRole = "support";
+    const target = rtSupportTarget(game, piece, carrier);
+    const safe = rtPassLaneRisk(game, carrier, { rx: target.x, ry: target.y, side }) < 18;
+    if (!safe && ["CM", "CAM", "ST"].includes(piece.role)) target.x = clampFieldX(target.x + (target.x < 50 ? -5 : 5));
+    return target;
+  }
+  return rtDefensiveTarget(game, piece, carrier);
+}
+
+function rtNearestToBall(game, side = null) {
+  const pool = (game.pieces || []).filter((p) => rtAlive(game, p) && (!side || p.side === side));
+  return pool.map((p) => ({ p, d: rtBallDist(p, game.ball) })).sort((a, b) => a.d - b.d || b.p.pace - a.p.pace)[0]?.p || null;
+}
+function rtNearestEnemy(game, side, point) {
+  return rtOpponent(game, side).map((p) => ({ p, d: Math.hypot(p.rx - point.x, p.ry - point.y) })).sort((a, b) => a.d - b.d || b.p.defend - a.p.defend)[0]?.p || null;
+}
+function rtNearestFriend(game, side, point) {
+  return rtTeam(game, side).map((p) => ({ p, d: Math.hypot(p.rx - point.x, p.ry - point.y) })).sort((a, b) => a.d - b.d || b.p.overall - a.p.overall)[0]?.p || null;
+}
+function rtSwitchCandidates(game, side) {
+  const ball = game.ball || { x: FIELD_W / 2, y: FIELD_H / 2 };
+  const carrier = getPiece(game, game.ballOwnerId);
+  const danger = carrier || { rx: ball.x, ry: ball.y, side: otherSide(side), role: "BALL", overall: 50 };
+  return rtTeam(game, side)
+    .filter((p) => p.role !== "GK")
+    .map((p) => {
+      const dBall = rtBallDist(p, ball);
+      const dCarrier = carrier ? rtDist(p, carrier) : dBall;
+      const rolePress = ({ ST: -1.4, LW: -1.1, RW: -1.1, CAM: -0.8, CM: -0.3, CDM: -0.1, LB: 0.5, RB: 0.5, CB: 1.6 })[p.role] || 0;
+      const wrongSide = carrier && carrier.side !== side ? Math.max(0, rtForwardAmount(side, danger.ry, p.ry)) * 0.06 : 0;
+      return { p, score: dBall * 0.72 + dCarrier * 0.38 + rolePress + wrongSide - (p.defend || 60) * 0.012 };
+    })
+    .sort((a, b) => a.score - b.score || rtBallDist(a.p, ball) - rtBallDist(b.p, ball))
+    .map((x) => x.p);
+}
+function rtSwitchTarget(game, side, currentId = null) {
+  const near = rtSwitchCandidates(game, side).slice(0, 6);
+  if (!near.length) return rtNearestToBall(game, side);
+  const idx = near.findIndex((p) => String(p.id) === String(currentId));
+  if (idx < 0) return near[0];
+  return near[(idx + 1) % near.length] || near[0];
+}
+function rtKeeperFor(game, side) {
+  return rtTeam(game, side).find((p) => p.role === "GK") || null;
+}
+function rtKeeperRushActive(game, side) {
+  return game?.rt?.keeperRush?.side === side && (game.rt.keeperRush.until || 0) > rtLiveNow(game);
+}
+function rtKeeperRushTarget(game, keeper) {
+  if (!keeper) return null;
+  const side = keeper.side;
+  const carrier = getPiece(game, game.ballOwnerId);
+  const ball = game.ball || { x: goalCenterX(), y: rtOwnGoalY(side) };
+  const threat = carrier && carrier.side !== side ? { x: carrier.rx, y: carrier.ry } : { x: ball.x, y: ball.y };
+  const ownY = rtOwnGoalY(side);
+  const maxOutY = side === "home" ? clamp(threat.y, FIELD_H - 27, FIELD_H - 2.2) : clamp(threat.y, 2.2, 27);
+  const x = clamp(threat.x, 13, 87);
+  return { x, y: clampFieldY(maxOutY) };
+}
+function rtKeeperRushResolve(game, keeper) {
+  if (!keeper || !rtKeeperRushActive(game, keeper.side)) return;
+  const carrier = getPiece(game, game.ballOwnerId);
+  if (carrier && carrier.side !== keeper.side && rtDist(keeper, carrier) < 5.2) {
+    rtTackle(game, keeper, carrier, true);
+    return;
+  }
+  if (!game.ballOwnerId && game.ball && rtBallDist(keeper, game.ball) < 3.25) {
+    rtSetPossession(game, keeper, `🧤 ${firstName(keeper.name)} maju cepat dan mengamankan bola.`);
+  }
+}
+function rtKickoffPlayer(game, side) {
+  const pool = rtTeam(game, side);
+  const attackers = pool.filter((p) => ["ST", "CAM", "LW", "RW", "LM", "RM", "CM"].includes(p.role));
+  return (attackers.length ? attackers : pool).slice().sort((a, b) => rtRoleRank(b.role) - rtRoleRank(a.role) || b.overall - a.overall)[0]?.id || pool[0]?.id || null;
+}
+function makeRealtimeSoccerGame(game) {
+  const next = clone(game);
+  const setup = (side, formation) => {
+    const slots = rtFormationFieldSlots(formation || "4-3-3", side);
+    const pieces = next.pieces.filter((p) => p.side === side);
+    pieces.forEach((p, i) => {
+      const slot = slots[i] || { x: p.rx ?? gridToFieldX(p.x), y: p.ry ?? gridToFieldY(p.y), pos: p.role };
+      const rx = clampFieldX(slot.x);
+      const ry = clampFieldY(slot.y);
+      Object.assign(p, {
+        rx, ry,
+        x: clamp(Math.round(((rx - 4) / (FIELD_W - 8)) * (BOARD_COLS - 1)), 0, BOARD_COLS - 1),
+        y: clamp(Math.round(((ry - 3) / (FIELD_H - 6)) * (BOARD_ROWS - 1)), 0, BOARD_ROWS - 1),
+        vx: 0, vy: 0, homeX: rx, homeY: ry, targetX: rx, targetY: ry,
+        aiCooldown: rng(2, 4), tackleCooldown: 0, manualUntil: 0, sprintUntil: 0, realRating: p.overall,
+      });
+    });
+  };
+  setup("home", next.homeFormation);
+  setup("away", next.awayFormation);
+  const first = rtKickoffPlayer(next, "home");
+  const owner = getPiece(next, first) || next.pieces[0];
+  next.mode = "realtimeSoccer";
+  next.turn = next.userSide;
+  next.ap = 0;
+  next.actionNo = 1;
+  next.maxActions = 99999;
+  next.ballOwnerId = owner?.id || null;
+  next.ball = { x: owner?.rx ?? FIELD_W / 2, y: owner?.ry ?? FIELD_H / 2, vx: 0, vy: 0, ownerId: owner?.id || null, intent: null, free: false };
+  next.rt = { tick: 0, liveSeconds: 0, selectedId: owner?.side === next.userSide ? owner.id : null, commentary: "Real-time football mode aktif", lastTouchSide: owner?.side || "home", lastTouchId: owner?.id || null, paused: true, viewMode: "normal" };
+  next.history = [{ minute: 1, icon: "⚽", text: `Real-time v14 kick off: ${next.homeName}. Semua pemain bergerak otomatis seperti pertandingan bola.` }, ...(next.history || []).slice(0, 30)];
+  next.lastAction = "Real-time v14 Pro AI Fast Match: movement lebih halus, gaya main lebih terasa, switch dekat bola, keeper rush, tackle tetap punya risiko kartu/cedera.";
+  return next;
+}
+function rtResetAfterGoal(game, scoringSide) {
+  const restart = otherSide(scoringSide);
+  ["home", "away"].forEach((side) => {
+    const slots = rtFormationFieldSlots(side === "home" ? game.homeFormation : game.awayFormation, side);
+    game.pieces.filter((p) => p.side === side).forEach((p, i) => {
+      if (!p.red && !p.vacant) {
+        const slot = slots[i] || { x: p.rx, y: p.ry };
+        p.rx = clampFieldX(slot.x); p.ry = clampFieldY(slot.y);
+        p.x = clamp(Math.round(((p.rx - 4) / (FIELD_W - 8)) * (BOARD_COLS - 1)), 0, BOARD_COLS - 1);
+        p.y = clamp(Math.round(((p.ry - 3) / (FIELD_H - 6)) * (BOARD_ROWS - 1)), 0, BOARD_ROWS - 1);
+        p.homeX = p.rx; p.homeY = p.ry; p.targetX = p.rx; p.targetY = p.ry; p.manualUntil = 0; p.aiCooldown = rng(2, 4);
+      }
+    });
+  });
+  const ownerId = rtKickoffPlayer(game, restart);
+  const owner = getPiece(game, ownerId);
+  game.ballOwnerId = ownerId;
+  game.ball = { x: owner?.rx ?? FIELD_W / 2, y: owner?.ry ?? FIELD_H / 2, vx: 0, vy: 0, ownerId, intent: null, free: false };
+  game.rt = { ...(game.rt || {}), lastTouchSide: restart, lastTouchId: ownerId };
+  game.goalPause = { scorerSide: scoringSide, restartSide: restart, score: { ...game.score }, minute: minuteOf(game), text: game.lastAction };
+  game.highlights = [{ minute: minuteOf(game), icon: "🥅", text: game.lastAction, score: { ...game.score } }, ...(game.highlights || [])].slice(0, 12);
+}
+function rtFinishIfNeeded(game) {
+  if ((game.clockSeconds || 0) >= matchMaxSeconds(game)) return finishMatchWithExtraTime(game, "Full time real-time");
+  return false;
+}
+function rtSetPossession(game, piece, text = "") {
+  if (!piece || !rtAlive(game, piece)) return;
+  game.ballOwnerId = piece.id;
+  game.ball = { ...(game.ball || {}), x: piece.rx, y: piece.ry, vx: 0, vy: 0, ownerId: piece.id, free: false, intent: null };
+  game.rt = { ...(game.rt || {}), lastTouchSide: piece.side, lastTouchId: piece.id, ballState: text ? { label: "BOLA IN", type: "in", text, until: rtLiveUntil(game, 5) } : game.rt?.ballState };
+  if (text) appendLog(game, "⚽", text);
+}
+function rtRestartFromOut(game, type, side, point, reason = "") {
+  const safePoint = { x: clampFieldX(point?.x ?? FIELD_W / 2), y: clampFieldY(point?.y ?? FIELD_H / 2) };
+  const taker = type === "goalKick"
+    ? (rtKeeperFor(game, side) || rtNearestFriend(game, side, safePoint))
+    : rtNearestFriend(game, side, safePoint);
+  if (!taker) return;
+  if (type === "corner") game.stats[side].corners = (game.stats[side].corners || 0) + 1;
+  const labels = { throwIn: "Throw-in", corner: "Corner", goalKick: "Goal kick" };
+  const icons = { throwIn: "↔️", corner: "🚩", goalKick: "🧤" };
+  game.ballOwnerId = taker.id;
+  taker.rx = clampFieldX(type === "corner" ? (safePoint.x < 50 ? goalX1() : goalX2()) : safePoint.x);
+  taker.ry = clampFieldY(type === "goalKick" ? sideOwnGoalY(side) + (side === "home" ? -5 : 5) : safePoint.y);
+  taker.targetX = taker.rx; taker.targetY = taker.ry;
+  game.ball = { x: taker.rx, y: taker.ry, vx: 0, vy: 0, ownerId: taker.id, free: false, intent: null };
+  game.rt = { ...(game.rt || {}), lastTouchSide: side, lastTouchId: taker.id, ballState: { label: "BOLA IN", type: "in", restart: type, text: `${labels[type]} untuk ${taker.teamName}`, until: rtLiveUntil(game, 6) } };
+  appendLog(game, icons[type] || "⚽", `Bola OUT${reason ? ` (${reason})` : ""}. ${labels[type]} cepat untuk ${taker.teamName} lewat ${firstName(taker.name)}.`, { type: "out", restart: type, side, team: taker.teamName });
+}
+function rtPassTarget(game, piece, through = false, aim = null) {
+  if (!piece || !rtAlive(game, piece)) return null;
+  const stick = aim ? rtSanitizeStick(aim) : rtStickDirectionForAction(game, piece);
+  const enemies = rtOpponent(game, piece.side);
+  const pressure = enemies.filter((e) => rtDist(e, piece) < 7.5).length;
+  const teammates = rtTeam(game, piece.side).filter((p) => p.id !== piece.id && p.role !== "GK");
+  const options = teammates.map((p) => {
+    const d = Math.max(1, rtDist(piece, p));
+    const forward = rtForwardAmount(piece.side, piece.ry, p.ry);
+    const laneRisk = rtPassLaneRisk(game, piece, p);
+    const marked = enemies.filter((e) => rtDist(e, p) < 5.5).length;
+    const receiverGoal = rtProgressToGoal(piece.side, p.ry) * 22;
+    const lineBonus = ({ ST: 10, LW: 7, RW: 7, CAM: 8, CM: 5, LM: 4, RM: 4, CDM: 1, LB: -1, RB: -1, CB: -4 })[p.role] || 0;
+    const shortSafety = d < 18 ? 8 : d < 30 ? 3 : -2;
+    const throughBonus = through ? Math.max(0, forward) * 0.85 + receiverGoal * 0.4 : Math.min(Math.max(forward, -6), 12) * 0.45;
+    const pressureNeed = pressure ? (d < 20 ? 5 : -2) : 0;
+    const dx = p.rx - piece.rx;
+    const dy = p.ry - piece.ry;
+    const stickDot = stick.mag ? rtDotDir(stick.x, stick.y, dx, dy) : 0;
+    const stickBonus = stick.mag ? clamp(stickDot, -1, 1) * (through ? 26 : 19) * stick.mag : 0;
+    const badBackPass = through && forward < -3 ? -18 : 0;
+    const score = p.overall * 0.18 + p.pass * 0.08 + lineBonus + shortSafety + throughBonus + pressureNeed + stickBonus + badBackPass - laneRisk * 0.85 - marked * 8 - Math.abs(p.rx - piece.rx) * 0.035;
+    return { p, score, laneRisk, d, forward, stickDot };
+  }).filter((o) => o.laneRisk < (through ? 31 : 36) || o.d < 12 || (stick.mag && o.stickDot > 0.72))
+    .sort((a, b) => b.score - a.score || a.d - b.d);
+  return options[0]?.p || teammates.sort((a, b) => rtDist(piece, a) - rtDist(piece, b))[0] || null;
+}
+function rtBestDribbleTarget(game, carrier) {
+  const dir = rtSideDir(carrier.side);
+  const candidates = [
+    { dx: 0, dy: dir * 7.5 },
+    { dx: -6, dy: dir * 6.2 },
+    { dx: 6, dy: dir * 6.2 },
+    { dx: -8, dy: dir * 3.2 },
+    { dx: 8, dy: dir * 3.2 },
+    { dx: 0, dy: dir * 3.8 },
+  ];
+  const enemies = rtOpponent(game, carrier.side);
+  const style = sideStyle(game, carrier.side);
+  const laneHome = carrier.homeX ?? carrier.rx;
+  const scored = candidates.map((c) => {
+    const x = clampFieldX(carrier.rx + c.dx);
+    const y = clampFieldY(carrier.ry + c.dy);
+    const nearest = enemies.reduce((m, e) => Math.min(m, Math.hypot(e.rx - x, e.ry - y)), 99);
+    const goalGain = rtForwardAmount(carrier.side, carrier.ry, y) * 1.8;
+    const laneDiscipline = -Math.abs(x - laneHome) * (style === "Wing Play" && ["LW", "RW", "LM", "RM"].includes(carrier.role) ? 0.02 : 0.08);
+    const centerBonus = carrier.role === "ST" || carrier.role === "CAM" ? -Math.abs(x - goalCenterX()) * 0.08 : 0;
+    const sidelinePenalty = (x < 8 || x > 92) ? -7 : 0;
+    return { x, y, score: nearest * 1.4 + goalGain + laneDiscipline + centerBonus + sidelinePenalty };
+  }).sort((a, b) => b.score - a.score);
+  return scored[0] || { x: carrier.rx, y: carrier.ry + dir * 3 };
+}
+function rtShootingWindow(game, carrier) {
+  if (!carrier || carrier.role === "GK") return { can: false, chance: 0, reason: "GK" };
+  const goalY = rtAttackGoalY(carrier.side);
+  const distGoal = Math.abs(carrier.ry - goalY);
+  const anglePenalty = Math.abs(carrier.rx - goalCenterX()) * 0.58;
+  const pressure = rtOpponent(game, carrier.side).filter((e) => rtDist(e, carrier) < 7.2).length;
+  const laneRisk = rtShotLaneRisk(game, carrier);
+  const keeper = rtTeam(game, otherSide(carrier.side)).find((p) => p.role === "GK");
+  const keeperPos = keeper ? Math.abs(keeper.rx - goalCenterX()) * 0.32 + Math.abs(keeper.ry - rtOwnGoalY(keeper.side)) * 0.22 : 6;
+  const chance = clamp(76 + carrier.shoot * 0.27 + carrier.overall * 0.12 - distGoal * 1.02 - anglePenalty - pressure * 9 - laneRisk * 0.7 - keeperPos, 4, 91);
+  return { can: distGoal < 27 && chance > 42 && laneRisk < 28, chance, laneRisk, distGoal };
+}
+
+function rtLaunchBall(game, piece, targetX, targetY, speed, intent) {
+  const dx = targetX - piece.rx;
+  const dy = targetY - piece.ry;
+  const dist = Math.max(1, Math.hypot(dx, dy));
+  game.ballOwnerId = null;
+  game.ball = { x: piece.rx, y: piece.ry, vx: (dx / dist) * speed, vy: (dy / dist) * speed, ownerId: null, free: true, intent: { ...intent, fromId: piece.id, side: piece.side, targetX, targetY } };
+  game.rt = { ...(game.rt || {}), lastTouchSide: piece.side, lastTouchId: piece.id };
+}
+function rtPass(game, piece, target = null, through = false, aim = null) {
+  if (!piece || !rtAlive(game, piece) || game.ballOwnerId !== piece.id) return;
+  const stick = aim ? rtSanitizeStick(aim) : rtStickDirectionForAction(game, piece);
+  const t = target || rtPassTarget(game, piece, through, stick);
+  if (!t) return;
+  const lead = rtReceiverLead(game, piece, t, through);
+  let tx = lead.x;
+  let ty = lead.y;
+  // Jika user menahan stick kuat ke ruang kosong, through ball diarahkan ke ruang itu agar respons terasa langsung.
+  if (through && stick.mag > 0.45) {
+    tx = clampFieldX((tx * 0.58) + (piece.rx + stick.x * 22) * 0.42);
+    ty = clampFieldY((ty * 0.58) + (piece.ry + stick.y * 20) * 0.42);
+  }
+  const dist = Math.hypot(tx - piece.rx, ty - piece.ry);
+  rtLaunchBall(game, piece, tx, ty, (through ? 20 : 16) + Math.min(4, dist / 18), { kind: through ? "through" : "pass", targetId: t.id, targetName: t.name, expire: rtLiveUntil(game, through ? 8.5 : 6.5) });
+  game.stats[piece.side].passes += 1;
+  piece.energy = clamp((piece.energy || 80) - (through ? 1.4 : 0.9), 0, 100);
+  appendLog(game, through ? "🪄" : "🎯", `${firstName(piece.name)} ${through ? "through ball" : "mengoper"} ke ${firstName(t.name)}${stick.mag ? " sesuai arah stick" : ""}.`);
+}
+function rtShoot(game, piece, aim = null) {
+  if (!piece || !rtAlive(game, piece) || game.ballOwnerId !== piece.id || piece.role === "GK") return;
+  const stick = aim ? rtSanitizeStick(aim) : rtStickDirectionForAction(game, piece);
+  const target = rtShotTargetFromStick(game, piece, stick);
+  const goalY = sideGoalY(piece.side);
+  const distGoal = Math.abs(piece.ry - goalY);
+  const anglePenalty = Math.abs(piece.rx - goalCenterX()) * 0.55;
+  const pressure = rtOpponent(game, piece.side).filter((e) => rtDist(e, piece) < 8).length;
+  const laneRisk = rtShotLaneRisk(game, piece);
+  const keeper = rtTeam(game, otherSide(piece.side)).find((p) => p.role === "GK");
+  const keeperCover = keeper ? Math.max(0, 18 - Math.abs(keeper.rx - goalCenterX()) * 0.7 - Math.abs(keeper.ry - sideOwnGoalY(keeper.side)) * 0.18) : 6;
+  const onBalance = stick.mag ? Math.max(0, rtDotDir(stick.x, stick.y, target.x - piece.rx, target.y - piece.ry)) : 0.58;
+  const chance = clamp(72 + piece.shoot * 0.27 + piece.overall * 0.13 + onBalance * 5 - distGoal * 0.92 - anglePenalty - pressure * 8 - laneRisk * 0.55 - keeperCover * 0.85, 5, 90);
+  const accurate = roll(chance);
+  const spread = accurate ? rng(-3, 3) : pick([-1, 1]) * rng(9, 20);
+  const targetX = clamp(target.x + spread, -8, FIELD_W + 8);
+  const targetY = piece.side === "home" ? -6 : FIELD_H + 6;
+  rtLaunchBall(game, piece, targetX, targetY, 29 + Math.min(11, piece.shoot / 10), { kind: "shot", chance: Math.round(chance), accurate });
+  game.stats[piece.side].shots += 1;
+  game.stats[piece.side].xg += clamp(chance / 100, 0.03, 0.82);
+  piece.energy = clamp((piece.energy || 80) - 5.4, 0, 100);
+  appendLog(game, "🥅", `${firstName(piece.name)} menembak real-time dari ${Math.round(distGoal)}m virtual (${Math.round(chance)}%)${stick.mag ? " sesuai arah stick" : ""}.`);
+}
+function rtTackle(game, tackler, carrier = null, forced = false) {
+  carrier = carrier || getPiece(game, game.ballOwnerId);
+  if (!tackler || !carrier || tackler.side === carrier.side || !rtAlive(game, tackler) || !rtAlive(game, carrier)) return false;
+  const dist = rtDist(tackler, carrier);
+  if (dist > (forced ? 6 : 3.2)) return false;
+  if (!forced && (tackler.tackleCooldown || 0) > rtLiveNow(game)) return false;
+  const isKeeperRush = tackler.role === "GK" && rtKeeperRushActive(game, tackler.side);
+  const style = styleProfile(game, tackler.side);
+  const chance = clamp(45 + (tackler.defend - carrier.dribble) * 0.45 + ((tackler.energy || 80) - 60) * 0.12 - (carrier.pace - tackler.pace) * 0.08 + (isKeeperRush ? 8 : 0) + (style?.tackle || 0) * 0.35 - Math.max(0, dist - 2.1) * 4, 10, isKeeperRush ? 88 : 84);
+  tackler.tackleCooldown = rtLiveUntil(game, rng(isKeeperRush ? 6 : 4, isKeeperRush ? 10 : 8));
+  game.stats[tackler.side].tackles += 1;
+  tackler.energy = clamp((tackler.energy || 80) - (isKeeperRush ? 5.8 : forced ? 4.2 : 2.4), 0, 100);
+  if (roll(chance)) {
+    game.stats[tackler.side].tackleOk += 1;
+    rtSetPossession(game, tackler, `${firstName(tackler.name)} merebut bola dari ${firstName(carrier.name)} (${Math.round(chance)}%).`);
+    if (roll(isKeeperRush ? 10 : forced ? 7 : 3)) possibleInjury(game, carrier, isKeeperRush ? "tabrakan dengan kiper" : "duel tackle");
+    return true;
+  }
+  const foulRisk = clamp((forced ? 18 : 6) + (isKeeperRush ? 16 : 0) + (style?.tackle || 0) * 0.35 + (tackler.energy < 30 ? 8 : 0), 4, 52);
+  if (roll(foulRisk)) {
+    game.stats[tackler.side].fouls += 1;
+    const redRisk = isKeeperRush ? 8 : forced ? 4 : 1;
+    const yellowRisk = clamp(22 + (isKeeperRush ? 20 : 0) + (tackler.yellow ? 22 : 0) + (tackler.personality === "Hot Temper" ? 10 : 0), 10, 82);
+    if (roll(redRisk)) {
+      tackler.red = true;
+      game.stats[tackler.side].reds += 1;
+      if (game.ballOwnerId === tackler.id) game.ballOwnerId = carrier.id;
+      appendLog(game, "🟥", `${firstName(tackler.name)} melakukan tackle keras dan mendapat kartu merah. Pemain keluar dan tidak bisa digantikan.`);
+    } else if (roll(yellowRisk)) {
+      tackler.yellow = (tackler.yellow || 0) + 1;
+      game.stats[tackler.side].yellows += 1;
+      if (tackler.yellow >= 2) {
+        tackler.red = true;
+        game.stats[tackler.side].reds += 1;
+        appendLog(game, "🟥", `${firstName(tackler.name)} mendapat kuning kedua setelah telat tackle ${firstName(carrier.name)}.`);
+      } else appendLog(game, "🟨", `${firstName(tackler.name)} telat menekel ${firstName(carrier.name)}. Kartu kuning.`);
+    } else appendLog(game, "⚠️", `${firstName(tackler.name)} melanggar ${firstName(carrier.name)}. Free kick cepat, bola tetap untuk ${carrier.teamName}.`);
+    if (roll(isKeeperRush ? 13 : forced ? 7 : 3)) possibleInjury(game, carrier, isKeeperRush ? "benturan kiper" : "tackle keras");
+  }
+  return false;
+}
+function rtHandleLooseBall(game, dt) {
+  const ball = game.ball;
+  ball.x += ball.vx * dt;
+  ball.y += ball.vy * dt;
+  ball.vx *= Math.pow(0.90, dt);
+  ball.vy *= Math.pow(0.90, dt);
+  const attackingSide = ball.vy < 0 ? "home" : "away";
+  if (ball.y <= 0 || ball.y >= FIELD_H) {
+    const inGoal = ball.x >= goalX1() && ball.x <= goalX2();
+    const defendingSide = attackingSide === "home" ? "away" : "home";
+    const keeper = rtTeam(game, defendingSide).find((p) => p.role === "GK") || rtNearestFriend(game, defendingSide, { x: goalCenterX(), y: sideOwnGoalY(defendingSide) });
+    if (inGoal) {
+      game.stats[attackingSide].onTarget += 1;
+      const shotChance = ball.intent?.chance ?? 58;
+      const keeperDx = keeper ? Math.abs((keeper.rx || goalCenterX()) - ball.x) : 99;
+      const keeperReady = keeper ? clamp(74 + (keeper.overall || 60) * 0.22 + (keeper.defend || 60) * 0.12 - shotChance * 0.62 - keeperDx * 7.5, 5, 82) : 0;
+      if (keeper && roll(keeperReady)) {
+        rtSetPossession(game, keeper, `🧤 ${firstName(keeper.name)} menepis shot real-time (${Math.round(keeperReady)}%).`);
+        game.stats[defendingSide].saves = (game.stats[defendingSide].saves || 0) + 1;
+        return;
+      }
+      game.score[attackingSide] += 1;
+      game.stats[attackingSide].goals += 1;
+      const scorer = getPiece(game, ball.intent?.fromId) || rtNearestFriend(game, attackingSide, ball);
+      appendLog(game, "🥅", `GOOOL real-time! ${scorer?.teamName || sideLabel(attackingSide)} mencetak gol lewat ${firstName(scorer?.name)}.`, { type: "goal", side: attackingSide, team: scorer?.teamName, player: scorer?.name });
+      rtResetAfterGoal(game, attackingSide);
+      return;
+    }
+    const lastTouch = game.rt?.lastTouchSide || ball.intent?.side || attackingSide;
+    if (lastTouch === attackingSide) rtRestartFromOut(game, "goalKick", defendingSide, { x: goalCenterX(), y: sideOwnGoalY(defendingSide) }, "shoot melebar");
+    else rtRestartFromOut(game, "corner", attackingSide, { x: ball.x, y: attackingSide === "home" ? 2 : FIELD_H - 2 }, "blok bek");
+    return;
+  }
+  if (ball.x < 0 || ball.x > FIELD_W) {
+    const throwSide = otherSide(game.rt?.lastTouchSide || attackingSide);
+    rtRestartFromOut(game, "throwIn", throwSide, { x: ball.x < 0 ? 2.4 : FIELD_W - 2.4, y: ball.y }, "sideline");
+    return;
+  }
+  const collectors = (game.pieces || []).filter((p) => rtAlive(game, p)).map((p) => ({ p, d: rtBallDist(p, ball) })).sort((a, b) => a.d - b.d || b.p.overall - a.p.overall);
+  const first = collectors[0];
+  if (first && first.d < 2.25) {
+    const targetId = ball.intent?.targetId;
+    const isTarget = first.p.id === targetId;
+    const chance = clamp((isTarget ? 78 : 52) + first.p.overall * 0.25 + first.p.dribble * 0.12 - first.d * 12, 28, 96);
+    if (roll(chance)) {
+      rtSetPossession(game, first.p);
+      if (ball.intent?.kind === "pass" || ball.intent?.kind === "through") {
+        if (first.p.side === ball.intent.side) { game.stats[first.p.side].passOk += 1; appendLog(game, "✅", `${firstName(first.p.name)} menerima ${ball.intent.kind === "through" ? "through ball" : "operan"}.`); }
+        else appendLog(game, "🛡️", `${firstName(first.p.name)} meng-intercept bola liar.`);
+      }
+    }
+  }
+}
+
+function quickSimPower(game, side) {
+  const core = (game.pieces || []).filter((p) => p.side === side && !p.red && !p.vacant);
+  const avg = avgOverall(core);
+  const morale = core.reduce((sum, p) => sum + (p.morale || 70), 0) / Math.max(1, core.length);
+  const stamina = core.reduce((sum, p) => sum + (p.stamina || 70), 0) / Math.max(1, core.length);
+  return avg + (morale - 70) * 0.08 + (stamina - 70) * 0.05 + (sideStyle(game, side) === "High Press" ? 1.5 : 0);
+}
+function quickSimEventText(game, ev) {
+  const team = ev.side === "home" ? game.homeName : game.awayName;
+  const player = ev.playerName || firstName(ev.player?.name) || "pemain";
+  if (ev.type === "goal") return `GOL! ${team} mencetak gol lewat ${player}.`;
+  if (ev.type === "shot") return `${team} membangun serangan cepat, ${player} mendapat peluang.`;
+  if (ev.type === "save") return `Kiper menggagalkan peluang ${team}; bola tetap hidup.`;
+  if (ev.type === "yellow") return `${player} mendapat kartu kuning setelah duel keras.`;
+  if (ev.type === "red") return `${player} kartu merah. Tim harus lanjut tanpa pengganti.`;
+  if (ev.type === "injury") return `${player} cedera parah saat duel. Simulasi dipause agar manager bisa rotasi.`;
+  if (ev.type === "sub") return `${team} melakukan pergantian pemain otomatis untuk menjaga stamina.`;
+  return `${team} mengubah tempo dan mencari ruang.`;
+}
+function makeQuickSimTimeline(game) {
+  const hp = quickSimPower(game, "home");
+  const ap = quickSimPower(game, "away");
+  const important = isImportantEliminationGame(game);
+  const moments = [];
+  const add = (min, type, side, extra = {}) => moments.push({ id: `sim-${min}-${type}-${side}-${Math.random().toString(36).slice(2, 6)}`, min, type, side, ...extra });
+  const goalBiasHome = clamp(34 + (hp - ap) * 1.4 + (game.isDerby ? 4 : 0), 18, 55);
+  [9, 17, 24, 33, 41, 52, 61, 70, 78, 86].forEach((min, i) => {
+    const side = roll(goalBiasHome) ? "home" : "away";
+    const attack = side === "home" ? hp : ap;
+    const defend = side === "home" ? ap : hp;
+    const pressure = i > 6 && important ? 8 : 0;
+    const chance = clamp(8 + (attack - defend) * 0.35 + rng(0, 18) + pressure, 4, 32);
+    const player = pick(rtTeam(game, side).filter((p) => p.role !== "GK") || []);
+    if (roll(chance)) add(min, "goal", side, { playerId: player?.playerId, playerName: player?.name });
+    else add(min, roll(46) ? "shot" : "save", side, { playerId: player?.playerId, playerName: player?.name });
+  });
+  [29, 57, 74].forEach((min) => {
+    if (roll(38)) {
+      const side = roll(50) ? "home" : "away";
+      const p = pick(rtTeam(game, side).filter((x) => x.role !== "GK") || []);
+      add(min, roll(9) ? "red" : "yellow", side, { playerId: p?.playerId, pieceId: p?.id, playerName: p?.name });
+    }
+  });
+  [36, 68].forEach((min) => {
+    if (roll(14)) {
+      const side = roll(50) ? "home" : "away";
+      const p = pick(rtTeam(game, side).filter((x) => x.role !== "GK") || []);
+      add(min, "injury", side, { playerId: p?.playerId, pieceId: p?.id, playerName: p?.name });
+    }
+  });
+  [60, 72, 82].forEach((min) => {
+    add(min, "sub", roll(50) ? "home" : "away");
+  });
+  return moments.sort((a, b) => a.min - b.min || a.type.localeCompare(b.type));
+}
+function makeQuickSimGame(game) {
+  const next = makeRealtimeSoccerGame(game);
+  next.mode = "quickSim";
+  next.clockSeconds = 0;
+  next.matchMaxSeconds = MATCH_CLOCK_SECONDS;
+  next.score = { home: 0, away: 0 };
+  next.ballOwnerId = null;
+  next.sim = { paused: false, timeline: makeQuickSimTimeline(next), processed: [], speedLabel: "Cuplikan cepat AI", staminaPulse: 0 };
+  next.history = [{ minute: 1, icon: "📺", text: `Quick Sim dimulai: AI memainkan ${next.homeName} vs ${next.awayName}. User bisa pause dan ganti pemain.` }];
+  next.lastAction = "Quick Sim aktif. Cuplikan gol, kartu, cedera, pergantian, dan tekanan lawan akan muncul cepat.";
+  return next;
+}
+function processQuickSimEvent(game, ev) {
+  if (!ev || (game.sim?.processed || []).includes(ev.id)) return;
+  game.sim.processed = [...(game.sim?.processed || []), ev.id];
+  const side = ev.side || (roll(50) ? "home" : "away");
+  const teamPieces = rtTeam(game, side).filter((p) => p.role !== "GK");
+  const piece = ev.pieceId ? getPiece(game, ev.pieceId) : (teamPieces.find((p) => p.playerId === ev.playerId) || pick(teamPieces));
+  if (ev.type === "goal") {
+    game.score[side] += 1;
+    game.stats[side].goals += 1;
+    game.stats[side].shots += 1;
+    game.stats[side].onTarget += 1;
+    appendLog(game, "🥅", quickSimEventText(game, { ...ev, playerName: piece?.name || ev.playerName }), { type: "goal", side, team: side === "home" ? game.homeName : game.awayName, playerId: piece?.playerId, player: piece?.name });
+  } else if (ev.type === "shot" || ev.type === "save") {
+    game.stats[side].shots += 1;
+    if (ev.type === "save") game.stats[side].onTarget += 1;
+    appendLog(game, ev.type === "save" ? "🧤" : "🎬", quickSimEventText(game, { ...ev, playerName: piece?.name || ev.playerName }));
+  } else if (ev.type === "yellow" || ev.type === "red") {
+    if (piece) {
+      if (ev.type === "red") { piece.red = true; game.stats[side].reds += 1; appendLog(game, "🟥", quickSimEventText(game, { ...ev, playerName: piece.name }), { type: "red", side, playerId: piece.playerId, player: piece.name }); }
+      else { piece.yellow = (piece.yellow || 0) + 1; game.stats[side].yellows += 1; appendLog(game, "🟨", quickSimEventText(game, { ...ev, playerName: piece.name })); }
+    }
+  } else if (ev.type === "injury") {
+    if (piece) {
+      autoReplaceInjuredPiece(game, piece, "simulate duel", true);
+      if (side === game.userSide) game.sim.paused = true;
+      else quickSimAutoSub(game, side);
+    }
+  } else if (ev.type === "sub") {
+    quickSimAutoSub(game, side);
+  } else appendLog(game, "📊", quickSimEventText(game, ev));
+}
+function quickSimAutoSub(game, side) {
+  if ((game.subCount?.[side] || 0) >= SUBSTITUTION_LIMIT) return;
+  const out = rtTeam(game, side).filter((p) => p.role !== "GK").sort((a, b) => (a.energy || 80) - (b.energy || 80))[0];
+  const bench = game.bench?.[side] || [];
+  const sub = out ? bench.slice().sort((a, b) => benchFitScore(b, out.role, out.overall) - benchFitScore(a, out.role, out.overall))[0] : null;
+  if (!out || !sub) return;
+  const idx = bench.findIndex((p) => String(p.id) === String(sub.id));
+  if (idx >= 0) bench.splice(idx, 1);
+  const old = { id: out.playerId, name: out.name, pos: out.role, trait: out.trait, overall: out.overall, pace: out.pace, shoot: out.shoot, pass: out.pass, dribble: out.dribble, defend: out.defend, stamina: out.stamina, fitness: clamp(out.energy - 8, 20, 100), personality: out.personality, morale: out.morale, value: 0 };
+  if (!out.vacant && old.id) bench.push(old);
+  Object.assign(out, { playerId: sub.id, name: sub.name, trait: sub.trait, personality: sub.personality, overall: sub.overall, pace: sub.pace, shoot: sub.shoot, pass: sub.pass, dribble: sub.dribble, defend: sub.defend, stamina: sub.stamina, energy: clamp(sub.fitness || 90, 55, 100), morale: clamp(sub.morale || 70, 40, 99), subbedIn: true, vacant: false, mustSub: false, injured: false, minorInjury: false, knockUntil: 0 });
+  game.subCount[side] = (game.subCount?.[side] || 0) + 1;
+  appendLog(game, "🔁", `${side === "home" ? game.homeName : game.awayName} melakukan pergantian AI: ${firstName(sub.name)} masuk menggantikan ${firstName(old.name)}. (${game.subCount[side]}/3)`);
+}
+function tickQuickSim(game, seconds = QUICK_SIM_TICK_SECONDS) {
+  const next = clone(game);
+  if (!next || next.ended || next.goalPause || next.mode !== "quickSim") return next;
+  if (next.sim?.paused) return next;
+  next.clockSeconds = clamp((next.clockSeconds || 0) + seconds, 0, matchMaxSeconds(next));
+  next.sim = { ...(next.sim || {}), staminaPulse: (next.sim?.staminaPulse || 0) + 1 };
+  (next.pieces || []).forEach((p) => { if (rtAlive(next, p)) p.energy = clamp((p.energy || 85) - (p.stamina ? clamp(88 - p.stamina, 0, 42) / 90 : 0.18) - 0.55, 18, 100); });
+  const minute = minuteOf(next);
+  (next.sim?.timeline || []).filter((ev) => ev.min <= minute && !(next.sim?.processed || []).includes(ev.id)).forEach((ev) => processQuickSimEvent(next, ev));
+  if ((next.clockSeconds || 0) >= matchMaxSeconds(next)) finishMatchWithExtraTime(next, next.extraTimeStarted ? "AET" : "Quick Sim full time");
+  return next;
+}
+function applyQuickSimAction(game, action) {
+  const next = clone(game);
+  if (action.type === "start") { next.sim = { ...(next.sim || {}), paused: false }; appendLog(next, "▶️", "Quick Sim dilanjutkan."); return next; }
+  if (action.type === "pause") { next.sim = { ...(next.sim || {}), paused: true }; appendLog(next, "⏸️", "Quick Sim dipause. Kamu bisa ganti pemain maksimal 3 kali."); return next; }
+  if (action.type === "surrender") {
+    const loseSide = next.userSide; const winSide = otherSide(loseSide);
+    next.score = loseSide === "home" ? { home: 0, away: 3 } : { home: 3, away: 0 };
+    next.clockSeconds = matchMaxSeconds(next); next.ended = true; next.winner = winSide;
+    appendLog(next, "🏳️", `User surrender di Quick Sim. ${winSide === "home" ? next.homeName : next.awayName} menang 3-0.`, { type: "surrender", side: loseSide });
+    return next;
+  }
+  if (action.type === "sub") return applyRealtimeAction(next, action);
+  return next;
+}
+function rtAutoDecideWithBall(game, carrier) {
+  if (!carrier || !rtAlive(game, carrier)) return;
+  carrier.aiCooldown = Math.max(0, (carrier.aiCooldown || 0) - REAL_SOCCER_TICK_SECONDS);
+  const isUserCarrier = carrier.side === game.userSide;
+  const dir = rtSideDir(carrier.side);
+  const pressureCount = rtOpponent(game, carrier.side).filter((e) => rtDist(e, carrier) < 7.5).length;
+
+  // User carrier sepenuhnya mengikuti stick. Jika stick diam, jangan diambil alih AI agar feel mobile presisi.
+  if (isUserCarrier) {
+    const stick = rtStickFor(game, carrier.id);
+    if (stick.mag) {
+      const target = rtManualMoveTarget(game, carrier, stick);
+      if (target) { carrier.targetX = target.x; carrier.targetY = target.y; carrier.manualUntil = rtLiveUntil(game, 0.55); }
+    } else if (!carrier.manualUntil || carrier.manualUntil < rtLiveNow(game)) {
+      carrier.targetX = carrier.rx;
+      carrier.targetY = carrier.ry;
+      carrier.vx = (carrier.vx || 0) * 0.74;
+      carrier.vy = (carrier.vy || 0) * 0.74;
+    }
+    return;
+  }
+
+  if ((carrier.aiCooldown || 0) > 0) return;
+  const shot = rtShootingWindow(game, carrier);
+  const throughIntent = pressureCount > 0 || shot.distGoal < 33 || ["Counter", "Long Ball", "Vertical Tiki Taka"].includes(sideStyle(game, carrier.side));
+  const passTarget = rtPassTarget(game, carrier, throughIntent);
+  const passRisk = passTarget ? rtPassLaneRisk(game, carrier, passTarget) : 99;
+  const forward = passTarget ? rtForwardAmount(carrier.side, carrier.ry, passTarget.ry) : 0;
+  const inFinalThird = rtProgressToGoal(carrier.side, carrier.ry) > 0.62;
+  const passBias = rtPassDecisionBias(game, carrier, passTarget, shot);
+  const style = sideStyle(game, carrier.side);
+  const forcedPass = carrier.role === "GK" || pressureCount >= 2 || (pressureCount >= 1 && passRisk < 25) || (passTarget && inFinalThird && forward > 6 && passRisk < 29) || (["Tiki Taka", "Possession", "Vertical Tiki Taka"].includes(style) && passBias > 8);
+
+  if (shot.can && (!passTarget || (shot.chance > 64 && passBias < 11) || (shot.chance > 54 && passRisk > 31) || (pressureCount === 0 && shot.chance > 58))) {
+    carrier.aiCooldown = 1.05;
+    rtShoot(game, carrier);
+    return;
+  }
+  if (passTarget && forcedPass) {
+    carrier.aiCooldown = 0.92 + Math.min(0.72, rtDist(carrier, passTarget) / 44);
+    rtPass(game, carrier, passTarget, forward > 8 && passRisk < 27 && passTarget.role !== "CB");
+    return;
+  }
+
+  // Ball carry profesional: pilih jalur paling kosong, bukan random ke pojok.
+  const dribble = rtBestDribbleTarget(game, carrier);
+  carrier.targetX = dribble.x;
+  carrier.targetY = dribble.y;
+  carrier.aiCooldown = pressureCount ? 0.85 : 1.15;
+}
+function rtShouldAutoTackle(game, defender, carrier) {
+  if (!defender || !carrier || defender.side === carrier.side || defender.role === "GK") return false;
+  if ((defender.tackleCooldown || 0) > rtLiveNow(game)) return false;
+  const d = rtDist(defender, carrier);
+  const role = defender.aiRole || rtPressAssignment(game, defender, carrier);
+  const active = role === "press" || role === "cover";
+  const facingOwnGoal = rtForwardAmount(defender.side, defender.ry, carrier.ry) < 4;
+  return active && d < (role === "press" ? 3.6 : 2.8) && facingOwnGoal;
+}
+
+function tickRealtimeSoccer(game, seconds = REAL_SOCCER_TICK_SECONDS) {
+  const next = clone(game);
+  if (!next || next.ended || next.goalPause) return next;
+  if (next.mode !== "realtimeSoccer") return tickRealtimeClock(next, seconds);
+  if (next.rt?.paused) return next;
+  next.clockSeconds = clamp((next.clockSeconds || 0) + REAL_SOCCER_CLOCK_SECONDS, 0, matchMaxSeconds(next));
+  next.rt = { ...(next.rt || {}), tick: (next.rt?.tick || 0) + 1, liveSeconds: ((next.rt?.liveSeconds || 0) + seconds) };
+  recoverMinorInjuries(next);
+
+  const ball = next.ball || { x: FIELD_W / 2, y: FIELD_H / 2, vx: 0, vy: 0, free: true, ownerId: null };
+  next.ball = ball;
+  next.pieces.forEach((p) => { if (p.aiRole && next.rt.tick % 4 === 0) p.aiRole = null; });
+
+  const carrier = getPiece(next, next.ballOwnerId);
+  if (carrier && rtAlive(next, carrier)) {
+    ball.ownerId = carrier.id;
+    ball.free = false;
+    const faceX = carrier.faceX ?? 0;
+    const faceY = carrier.faceY ?? rtSideDir(carrier.side);
+    ball.x = clampFieldX(carrier.rx + faceX * 0.9);
+    ball.y = clampFieldY(carrier.ry + faceY * 0.9);
+    ball.vx = 0;
+    ball.vy = 0;
+    rtAutoDecideWithBall(next, carrier);
+  } else {
+    next.ballOwnerId = null;
+    ball.ownerId = null;
+    ball.free = true;
+  }
+
+  const liveCarrier = getPiece(next, next.ballOwnerId);
+  const intendedReceiver = !next.ballOwnerId && ball.intent?.targetId ? getPiece(next, ball.intent.targetId) : null;
+  ["home", "away"].forEach((side) => {
+    const nearestBall = rtNearestToBall(next, side);
+    const team = rtTeam(next, side);
+    team.forEach((p) => {
+      if (p.knockUntil && p.knockUntil > (next.clockSeconds || 0)) return;
+      let rawTarget = { x: p.targetX ?? p.homeX ?? p.rx, y: p.targetY ?? p.homeY ?? p.ry };
+      const stick = rtStickFor(next, p.id);
+      if (rtIsManuallyControlled(next, p) && stick.mag) {
+        rawTarget = rtManualMoveTarget(next, p, stick) || rawTarget;
+        p.manualUntil = rtLiveUntil(next, 0.55);
+        p.sprintUntil = stick.mag > RT_STICK_SPRINT_ZONE ? rtLiveUntil(next, 0.32) : p.sprintUntil;
+      } else if (!next.ballOwnerId) {
+        // Loose ball: intended receiver dan pemain terdekat mengejar; pemain lain menjaga second-ball, bukan chaos.
+        if (intendedReceiver?.id === p.id) rawTarget = { x: ball.intent?.targetX ?? ball.x, y: ball.intent?.targetY ?? ball.y };
+        else if (nearestBall?.id === p.id) rawTarget = { x: ball.x, y: ball.y };
+        else {
+          const coverX = clampFieldX((p.homeX ?? p.rx) + (ball.x - FIELD_W / 2) * 0.16);
+          const coverY = clampFieldY((p.homeY ?? p.ry) + (ball.y - FIELD_H / 2) * 0.10);
+          rawTarget = { x: coverX, y: coverY };
+        }
+      } else if (!p.manualUntil || p.manualUntil < rtLiveNow(next) || p.side !== next.userSide || p.id !== next.rt?.selectedId) {
+        rawTarget = rtPitchSlotTarget(next, p, liveCarrier);
+      }
+      const profile = styleProfile(next, p.side);
+      const smartTarget = rtIsManuallyControlled(next, p) ? rawTarget : rtTeamShapeTarget(next, p, rawTarget, liveCarrier);
+      const aiStrength = clamp(0.26 + (profile?.offBall || 0) / 128 - rtRoleDiscipline(p) * 0.055 + (difficultyProfile(next).offBall || 0) / 180, 0.18, 0.50);
+      const target = rtBlendTarget(p, smartTarget, rtIsManuallyControlled(next, p) ? 0.94 : aiStrength);
+      const sprint = Boolean(p.sprintUntil && p.sprintUntil > rtLiveNow(next));
+      const shouldPressSprint = liveCarrier?.side !== p.side && (p.aiRole === "press" || p.aiRole === "cover") && rtDist(p, liveCarrier) > 5;
+      rtMoveToward(p, target.x, target.y, seconds, sprint || shouldPressSprint, next.ballOwnerId === p.id);
+      if (p.role === "GK") rtKeeperRushResolve(next, p);
+    });
+  });
+
+  rtResolveSpacing(next);
+  const movedCarrier = getPiece(next, next.ballOwnerId);
+  if (movedCarrier && rtAlive(next, movedCarrier)) {
+    next.ball.x = clampFieldX(movedCarrier.rx + (movedCarrier.faceX ?? 0) * 0.9);
+    next.ball.y = clampFieldY(movedCarrier.ry + (movedCarrier.faceY ?? rtSideDir(movedCarrier.side)) * 0.9);
+    next.rt.lastTouchSide = movedCarrier.side;
+    next.rt.lastTouchId = movedCarrier.id;
+    const tackler = rtOpponent(next, movedCarrier.side).filter((e) => rtShouldAutoTackle(next, e, movedCarrier)).sort((a, b) => rtDist(a, movedCarrier) - rtDist(b, movedCarrier) || b.defend - a.defend)[0];
+    if (tackler) rtTackle(next, tackler, movedCarrier, false);
+  } else {
+    rtHandleLooseBall(next, seconds);
+  }
+
+  if (next.clockSeconds % 30 < seconds) {
+    const side = getPiece(next, next.ballOwnerId)?.side || next.rt?.lastTouchSide;
+    if (side) next.stats[side].possession += 1;
+  }
+  if (next.rt.tick % 22 === 0) {
+    next.pieces.forEach((p) => { if (rtAlive(next, p)) p.energy = clamp((p.energy || 80) + 0.08, 0, 100); });
+  }
+  rtFinishIfNeeded(next);
+  return next;
+}
+
+function applyRealtimeAction(game, action) {
+  const next = clone(game);
+  if (action.type === "resumeGoal") { next.goalPause = null; return next; }
+  if (next.ended) return next;
+  if (action.type === "start") { next.rt = { ...(next.rt || {}), paused: false }; appendLog(next, "▶️", "Match dimulai. Kontrol utama memakai stick kiri."); return next; }
+  if (action.type === "pause") { next.rt = { ...(next.rt || {}), paused: true }; appendLog(next, "⏸️", "Match dipause untuk taktik/substitution."); return next; }
+  if (action.type === "toggleView") { next.rt = { ...(next.rt || {}), viewMode: action.viewMode || (next.rt?.viewMode === "3d" ? "normal" : "3d") }; return next; }
+  if (action.type === "surrender") {
+    const loseSide = next.userSide;
+    const winSide = otherSide(loseSide);
+    next.score = loseSide === "home" ? { home: 0, away: 3 } : { home: 3, away: 0 };
+    next.clockSeconds = matchMaxSeconds(next);
+    next.ended = true;
+    next.winner = winSide;
+    appendLog(next, "🏳️", `User surrender. ${winSide === "home" ? next.homeName : next.awayName} menang WO 3-0.`, { type: "surrender", side: loseSide });
+    return next;
+  }
+  if (action.type === "card") return applyCard(next, action.cardKey, next.userSide);
+  if (action.type === "switchPlayer") {
+    const target = rtSwitchTarget(next, next.userSide, action.currentId || next.rt?.selectedId);
+    if (target) {
+      next.rt = { ...(next.rt || {}), selectedId: target.id, stick: { x: 0, y: 0, mag: 0, pieceId: target.id } };
+      appendLog(next, "🔄", `Switch ke pemain dekat bola: ${target.role} ${firstName(target.name)}.`);
+    }
+    return next;
+  }
+  if (action.type === "keeperRush") {
+    const keeper = rtKeeperFor(next, next.userSide);
+    if (keeper) {
+      next.rt = { ...(next.rt || {}), keeperRush: { side: next.userSide, until: rtLiveUntil(next, 3.2) }, selectedId: keeper.id };
+      const t = rtKeeperRushTarget(next, keeper);
+      if (t) { keeper.targetX = t.x; keeper.targetY = t.y; keeper.sprintUntil = rtLiveUntil(next, 2.4); }
+      appendLog(next, "🧤", `${firstName(keeper.name)} diperintah maju untuk intercept/tackle.`);
+    }
+    return next;
+  }
+  if (action.type === "sub") {
+    const piece = getPiece(next, action.pieceId);
+    const bench = next.bench?.[piece?.side] || [];
+    const sub = bench.find((p) => String(p.id) === String(action.benchId));
+    if (!piece || !sub || piece.red || (next.subCount?.[piece.side] || 0) >= SUBSTITUTION_LIMIT) return next;
+    const idx = bench.findIndex((p) => String(p.id) === String(action.benchId));
+    bench.splice(idx, 1);
+    const old = { id: piece.playerId, name: piece.name, pos: piece.role, trait: piece.trait, overall: piece.overall, pace: piece.pace, shoot: piece.shoot, pass: piece.pass, dribble: piece.dribble, defend: piece.defend, stamina: piece.stamina, fitness: clamp(piece.energy - 8, 20, 100), personality: piece.personality, morale: piece.morale, value: 0 };
+    if (!piece.vacant && old.id) bench.push(old);
+    Object.assign(piece, { playerId: sub.id, name: sub.name, trait: sub.trait, roleSkills: roleSkillsFor(piece.role), personality: sub.personality, overall: sub.overall, pace: sub.pace, shoot: sub.shoot, pass: sub.pass, dribble: sub.dribble, defend: sub.defend, stamina: sub.stamina, energy: clamp(sub.fitness || 92, 55, 100), morale: clamp(sub.morale || 70, 40, 99), subbedIn: true, vacant: false, mustSub: false, injured: false, minorInjury: false, knockUntil: 0, rx: piece.rx, ry: piece.ry, targetX: piece.rx, targetY: piece.ry });
+    next.subCount[piece.side] = (next.subCount[piece.side] || 0) + 1;
+    appendLog(next, "🔁", `${firstName(sub.name)} masuk menggantikan ${firstName(old.name)} dalam real-time match.`);
+    return next;
+  }
+  const selected = getPiece(next, action.pieceId) || getPiece(next, next.rt?.selectedId) || rtNearestToBall(next, next.userSide);
+  if (!selected || selected.side !== next.userSide || !rtAlive(next, selected) || next.goalPause) return next;
+  next.rt = { ...(next.rt || {}), selectedId: selected.id };
+  if (action.type === "stick") {
+    const stick = rtSanitizeStick(action);
+    next.rt.stick = { ...stick, pieceId: selected.id, t: Date.now() };
+    if (stick.mag) {
+      const target = rtManualMoveTarget(next, selected, stick);
+      if (target) { selected.targetX = target.x; selected.targetY = target.y; }
+      selected.manualUntil = rtLiveUntil(next, 0.55);
+      selected.sprintUntil = stick.mag > RT_STICK_SPRINT_ZONE ? rtLiveUntil(next, 0.38) : selected.sprintUntil;
+    } else {
+      selected.manualUntil = 0;
+      selected.sprintUntil = 0;
+      selected.targetX = selected.rx;
+      selected.targetY = selected.ry;
+    }
+    return next;
+  }
+  if (action.type === "moveTo") {
+    selected.targetX = clampFieldX(action.x);
+    selected.targetY = clampFieldY(action.y);
+    selected.manualUntil = rtLiveUntil(next, 1.2);
+    if (!action.silent) appendLog(next, "👟", `${firstName(selected.name)} diarahkan ke ruang ${Math.round(selected.targetX)}:${Math.round(selected.targetY)}.`);
+    return next;
+  }
+  if (action.type === "sprint") {
+    selected.sprintUntil = rtLiveUntil(next, 1.2);
+    if (!action.silent) appendLog(next, "💨", `${firstName(selected.name)} sprint.`);
+    return next;
+  }
+  if (action.type === "skill") {
+    const owner = getPiece(next, next.ballOwnerId);
+    if (owner?.side !== next.userSide || owner.id !== selected.id) return next;
+    const stick = rtStickDirectionForAction(next, owner);
+    const dir = owner.side === "home" ? -1 : 1;
+    const enemy = rtNearestEnemy(next, owner.side, owner);
+    const pressure = enemy && rtDist(enemy, owner) < 7;
+    const chance = clamp(48 + owner.dribble * 0.35 + owner.overall * 0.12 - (pressure ? enemy.defend * 0.18 : 0), 25, 88);
+    owner.energy = clamp((owner.energy || 80) - 4, 0, 100);
+    if (roll(chance)) {
+      owner.targetX = clampFieldX(owner.rx + (stick.mag ? stick.x * 8 : (owner.rx < goalCenterX() ? 4 : -4)));
+      owner.targetY = clampFieldY(owner.ry + (stick.mag ? stick.y * 8 : dir * 6));
+      owner.manualUntil = rtLiveUntil(next, 2.4);
+      owner.sprintUntil = rtLiveUntil(next, 2.2);
+      appendLog(next, "✨", `${firstName(owner.name)} sukses skill move dan membuka ruang (${Math.round(chance)}%).`);
+    } else {
+      appendLog(next, "🧱", `${firstName(owner.name)} gagal skill move, bola masih dalam duel.`);
+      if (enemy && rtDist(enemy, owner) < 5) rtTackle(next, enemy, owner, true);
+    }
+    return next;
+  }
+  if (action.type === "pass" || action.type === "through") {
+    const owner = getPiece(next, next.ballOwnerId);
+    if (owner?.side !== next.userSide) return next;
+    const stick = rtStickDirectionForAction(next, owner);
+    const target = action.targetId ? getPiece(next, action.targetId) : rtPassTarget(next, owner, action.type === "through", stick);
+    rtPass(next, owner, target, action.type === "through", stick);
+    return next;
+  }
+  if (action.type === "shoot") {
+    const owner = getPiece(next, next.ballOwnerId);
+    if (owner?.side !== next.userSide) return next;
+    rtShoot(next, owner, rtStickDirectionForAction(next, owner));
+    return next;
+  }
+  if (action.type === "tackle") {
+    const carrier = getPiece(next, next.ballOwnerId);
+    rtTackle(next, selected, carrier, true);
+    return next;
+  }
+  return next;
+}
+
 function nearestEnemy(game, side, cell) {
   return game.pieces.filter((p) => !p.red && !p.vacant && !pieceTemporarilyOut(game, p) && p.side !== side).map((p) => ({ p, d: manhattan(p, cell) })).sort((a, b) => a.d - b.d || b.p.defend - a.p.defend)[0]?.p || null;
 }
@@ -2042,7 +3476,7 @@ function applyManualSub(game, pieceId, benchId) {
   const piece = getPiece(game, pieceId);
   if (!piece || piece.red || game.ended || game.goalPause) return game;
   if (game.turn !== piece.side || (!piece.vacant && game.ap < 1)) return game;
-  if ((game.subCount?.[piece.side] || 0) >= 5) { appendLog(game, "🚫", "Jatah substitution sudah habis."); return game; }
+  if ((game.subCount?.[piece.side] || 0) >= SUBSTITUTION_LIMIT) { appendLog(game, "🚫", "Jatah substitution 3 pemain sudah habis."); return game; }
   const bench = game.bench?.[piece.side] || [];
   const idx = bench.findIndex((p) => String(p.id) === String(benchId));
   if (idx < 0) return game;
@@ -2051,7 +3485,7 @@ function applyManualSub(game, pieceId, benchId) {
   if (!piece.vacant && old.playerId) bench.push({ id: old.playerId, name: old.name, pos: piece.role, trait: old.trait, overall: old.overall, pace: old.pace, shoot: old.shoot, pass: old.pass, dribble: old.dribble, defend: old.defend, stamina: old.stamina, fitness: clamp(old.energy - 8, 20, 100), personality: old.personality, morale: piece.morale, value: 0 });
   Object.assign(piece, { playerId: sub.id, name: sub.name, trait: sub.trait, roleSkills: roleSkillsFor(piece.role), personality: sub.personality, overall: sub.overall, pace: sub.pace, shoot: sub.shoot, pass: sub.pass, dribble: sub.dribble, defend: sub.defend, stamina: sub.stamina, energy: clamp(sub.fitness || 92, 55, 100), morale: clamp(sub.morale || 70, 40, 99), subbedIn: true, vacant: false, mustSub: false, injured: false, minorInjury: false, knockUntil: 0 });
   game.subCount[piece.side] = (game.subCount[piece.side] || 0) + 1;
-  appendLog(game, "🔁", `${firstName(sub.name)} masuk ${old.vacant ? "mengisi posisi kosong" : `menggantikan ${firstName(old.name)}`}. Substitution ${game.subCount[piece.side]}/5.`);
+  appendLog(game, "🔁", `${firstName(sub.name)} masuk ${old.vacant ? "mengisi posisi kosong" : `menggantikan ${firstName(old.name)}`}. Substitution ${game.subCount[piece.side]}/3.`);
   if (!old.vacant) advanceMatchClock(game, 25);
   return applyAutoShape(game);
 }
@@ -2525,7 +3959,7 @@ function simulateOtherMatch(home, away, week, fixture = {}) {
   return { week, homeId: home.id, awayId: away.id, home: home.name, away: away.name, homeGoals: h, awayGoals: a, events, derby, competition: fixture.competition || "league", leagueKey: fixture.leagueKey || home.leagueKey, cupName: fixture.cupName, stage: fixture.stage, group: fixture.group, matchKey: fixture.key };
 }
 function resultFromGame(game, week) {
-  return { week, homeId: game.homeId, awayId: game.awayId, home: game.homeName, away: game.awayName, homeGoals: game.score.home, awayGoals: game.score.away, events: game.events || [], derby: game.isDerby, stats: game.stats, competition: game.competition || "league", leagueKey: game.leagueKey, cupName: game.cupName, stage: game.stage, group: game.group, matchKey: game.matchKey };
+  return { week, homeId: game.homeId, awayId: game.awayId, home: game.homeName, away: game.awayName, homeGoals: game.score.home, awayGoals: game.score.away, events: game.events || [], derby: game.isDerby, stats: game.stats, penalty: game.penalty, extraTime: Boolean(game.extraTimeStarted), competition: game.competition || "league", leagueKey: game.leagueKey, cupName: game.cupName, stage: game.stage, group: game.group, matchKey: game.matchKey };
 }
 function applyResult(teams, result, userTeamId = MY_TEAM_ID) {
   const isLeague = !result.competition || result.competition === "league";
@@ -3393,11 +4827,26 @@ function FootballManager() {
     notify(`${fixture.cupName || leagueName(fixture.leagueKey) || "Liga"}: ${homeTeam.name} vs ${awayTeam.name}. Kick-off dari penyerang; posisi tetap aman di area sendiri.`, game.isDerby ? "derby" : "success");
   }, [aiDifficulty, facilities, formation, helpMode, lineupOverrides, notify, preMatch, season, startMatch, teams, trainingPlan]);
 
+  const beginPreparedSimulation = useCallback(() => {
+    if (!preMatch) { startMatch(); return; }
+    const { fixture, userSide } = preMatch;
+    const homeTeam = teamForFixture(teams, fixture.homeId, season, fixture.stage);
+    const awayTeam = teamForFixture(teams, fixture.awayId, season, fixture.stage);
+    const base = createMatch({ homeTeam, awayTeam, userSide, userFormation: formation, trainingPlan, facilities, lineupOverrides, aiDifficulty, helpMode });
+    Object.assign(base, { competition: fixture.competition || "league", leagueKey: fixture.leagueKey, cupName: fixture.cupName, stage: fixture.stage, group: fixture.group, matchKey: fixture.key });
+    const game = makeQuickSimGame(base);
+    setActive({ week: preMatch.week, fixture, game });
+    setPreMatch(null);
+    setSelectedId(null);
+    setTab("match");
+    notify(`Quick Sim dimulai: ${homeTeam.name} vs ${awayTeam.name}. Pause kapan saja untuk pergantian pemain.`, "success");
+  }, [aiDifficulty, facilities, formation, helpMode, lineupOverrides, notify, preMatch, season, startMatch, teams, trainingPlan]);
+
   useEffect(() => {
-    if (aiPaused || !active?.game || active.game.ended || active.game.goalPause || active.game.turn === active.game.userSide) return undefined;
+    if (aiPaused || !active?.game || active.game.mode === "realtimeSoccer" || active.game.ended || active.game.goalPause || active.game.turn === active.game.userSide) return undefined;
     const timer = window.setTimeout(() => {
       setActive((prev) => {
-        if (!prev?.game || prev.game.ended || prev.game.turn === prev.game.userSide) return prev;
+        if (!prev?.game || prev.game.mode === "realtimeSoccer" || prev.game.ended || prev.game.turn === prev.game.userSide) return prev;
         const action = bestAiAction(prev.game);
         return action ? { ...prev, game: applyAction(prev.game, action) } : prev;
       });
@@ -3408,20 +4857,23 @@ function FootballManager() {
 
   useEffect(() => {
     if (aiPaused || !active?.game || active.game.ended || active.game.goalPause) return undefined;
+    const isReal = active.game.mode === "realtimeSoccer";
+    const isQuick = active.game.mode === "quickSim";
     const timer = window.setInterval(() => {
       setActive((prev) => {
         if (!prev?.game || prev.game.ended || prev.game.goalPause) return prev;
-        return { ...prev, game: tickRealtimeClock(prev.game, REALTIME_TICK_SECONDS) };
+        const game = prev.game.mode === "realtimeSoccer" ? tickRealtimeSoccer(prev.game, REAL_SOCCER_TICK_SECONDS) : prev.game.mode === "quickSim" ? tickQuickSim(prev.game, QUICK_SIM_TICK_SECONDS) : tickRealtimeClock(prev.game, REALTIME_TICK_SECONDS);
+        return { ...prev, game };
       });
-    }, 1000);
+    }, isReal ? REAL_SOCCER_FRAME_MS : isQuick ? QUICK_SIM_FRAME_MS : 1000);
     return () => window.clearInterval(timer);
-  }, [active?.game?.ended, active?.game?.goalPause, aiPaused]);
+  }, [active?.game?.mode, active?.game?.ended, active?.game?.goalPause, aiPaused]);
 
   useEffect(() => {
-    if (aiPaused || !friendlyActive?.game || friendlyActive.game.ended || friendlyActive.game.goalPause || friendlyActive.game.turn === friendlyActive.game.userSide) return undefined;
+    if (aiPaused || !friendlyActive?.game || friendlyActive.game.mode === "realtimeSoccer" || friendlyActive.game.ended || friendlyActive.game.goalPause || friendlyActive.game.turn === friendlyActive.game.userSide) return undefined;
     const timer = window.setTimeout(() => {
       setFriendlyActive((prev) => {
-        if (!prev?.game || prev.game.ended || prev.game.turn === prev.game.userSide) return prev;
+        if (!prev?.game || prev.game.mode === "realtimeSoccer" || prev.game.ended || prev.game.turn === prev.game.userSide) return prev;
         const action = bestAiAction(prev.game);
         return action ? { ...prev, game: applyAction(prev.game, action) } : prev;
       });
@@ -3432,17 +4884,20 @@ function FootballManager() {
 
   useEffect(() => {
     if (aiPaused || !friendlyActive?.game || friendlyActive.game.ended || friendlyActive.game.goalPause) return undefined;
+    const isReal = friendlyActive.game.mode === "realtimeSoccer";
+    const isQuick = friendlyActive.game.mode === "quickSim";
     const timer = window.setInterval(() => {
       setFriendlyActive((prev) => {
         if (!prev?.game || prev.game.ended || prev.game.goalPause) return prev;
-        return { ...prev, game: tickRealtimeClock(prev.game, REALTIME_TICK_SECONDS) };
+        const game = prev.game.mode === "realtimeSoccer" ? tickRealtimeSoccer(prev.game, REAL_SOCCER_TICK_SECONDS) : prev.game.mode === "quickSim" ? tickQuickSim(prev.game, QUICK_SIM_TICK_SECONDS) : tickRealtimeClock(prev.game, REALTIME_TICK_SECONDS);
+        return { ...prev, game };
       });
-    }, 1000);
+    }, isReal ? REAL_SOCCER_FRAME_MS : isQuick ? QUICK_SIM_FRAME_MS : 1000);
     return () => window.clearInterval(timer);
-  }, [friendlyActive?.game?.ended, friendlyActive?.game?.goalPause, aiPaused]);
+  }, [friendlyActive?.game?.mode, friendlyActive?.game?.ended, friendlyActive?.game?.goalPause, aiPaused]);
 
   useEffect(() => {
-    if (!active?.game || active.game.ended || active.game.turn !== active.game.userSide) return;
+    if (!active?.game || active.game.ended) return;
     const carrier = getPiece(active.game, active.game.ballOwnerId);
     if (carrier?.side === active.game.userSide) setSelectedId(carrier.id);
   }, [active?.game?.turn, active?.game?.ballOwnerId]);
@@ -3451,6 +4906,8 @@ function FootballManager() {
     setActive((prev) => {
       if (!prev?.game) return prev;
       if (prev.game.ended && action.type !== "resumeGoal") return prev;
+      if (prev.game.mode === "realtimeSoccer") return { ...prev, game: applyRealtimeAction(prev.game, action) };
+      if (prev.game.mode === "quickSim") return { ...prev, game: applyQuickSimAction(prev.game, action) };
       if (action.type !== "resumeGoal" && action.type !== "card" && prev.game.turn !== prev.game.userSide) return prev;
       return { ...prev, game: applyAction(prev.game, action) };
     });
@@ -3818,7 +5275,7 @@ function FootballManager() {
 
   const upgradeFacility = (key) => {
     const level = facilities[key] || 1;
-    if (level >= 5) { notify("Level fasilitas sudah maksimal.", "warn"); return; }
+    if (level >= 3) { notify("Level fasilitas sudah maksimal.", "warn"); return; }
     const cost = Math.round(FACILITY_DEF[key].baseCost * Math.pow(1.65, level - 1));
     if (cash < cost) { notify(`Kas tidak cukup untuk upgrade ${FACILITY_DEF[key].label}. Butuh ${money(cost)}.`, "error"); return; }
     setCash((c) => c - cost);
@@ -3847,7 +5304,7 @@ function FootballManager() {
   if (friendlyActive) {
     return <div className="appShell tutorialShell">
       {notice && <Notice notice={notice} />}
-      <main className="tutorialMain"><section className="tutorialHeader"><div><p className="eyebrow">Quick Match / Friendly</p><h1>Latihan bebas</h1><p>Hasil tidak memengaruhi career. Gunakan untuk mencoba kontrol off-ball, shot zone, dan AI difficulty.</p></div><div className="tutorialControls"><button className="danger" onClick={() => { setFriendlyActive(null); setSelectedId(null); }}>Keluar Friendly</button></div></section><MatchTab active={friendlyActive} selectedId={selectedId} setSelectedId={setSelectedId} onAction={(action) => setFriendlyActive((prev) => prev?.game ? { ...prev, game: applyAction(prev.game, action) } : prev)} finishWeek={() => { setFriendlyActive(null); setSelectedId(null); }} startMatch={() => {}} aiPaused={aiPaused} setAiPaused={setAiPaused} helpMode={helpMode} /></main>
+      <main className="tutorialMain"><section className="tutorialHeader"><div><p className="eyebrow">Quick Match / Friendly</p><h1>Latihan bebas</h1><p>Hasil tidak memengaruhi career. Gunakan untuk mencoba kontrol off-ball, shot zone, dan AI difficulty.</p></div><div className="tutorialControls"><button className="danger" onClick={() => { setFriendlyActive(null); setSelectedId(null); }}>Keluar Friendly</button></div></section><MatchTab active={friendlyActive} selectedId={selectedId} setSelectedId={setSelectedId} onAction={(action) => setFriendlyActive((prev) => prev?.game ? { ...prev, game: prev.game.mode === "realtimeSoccer" ? applyRealtimeAction(prev.game, action) : applyAction(prev.game, action) } : prev)} finishWeek={() => { setFriendlyActive(null); setSelectedId(null); }} startMatch={() => {}} aiPaused={aiPaused} setAiPaused={setAiPaused} helpMode={helpMode} /></main>
     </div>;
   }
   if (!gameStarted) {
@@ -3874,7 +5331,7 @@ function FootballManager() {
       {tab === "training" && <TrainingTab trainingPlan={trainingPlan} setTrainingPlan={setTrainingPlan} facilities={facilities} team={myTeam} week={week} />}
       {tab === "squad" && <SquadTab team={myTeam} selected={selectedPlayer} setSelected={setSelectedPlayer} sell={sell} listLoan={listLoan} kickPlayer={kickPlayer} extendContract={extendContract} checkPotential={checkPotential} respondOffer={respondOffer} />}
       {tab === "tactics" && <TacticsTab team={myTeam} formation={formation} setFormation={setFormation} lineupOverrides={lineupOverrides} setLineupOverrides={setLineupOverrides} setTeamStyle={setTeamStyle} />}
-      {tab === "match" && (preMatch && !active ? <PreMatchTab preMatch={preMatch} teams={teams} formation={formation} setFormation={setFormation} lineupOverrides={lineupOverrides} setLineupOverrides={setLineupOverrides} setTeamStyle={setTeamStyle} trainingPlan={trainingPlan} setTrainingPlan={setTrainingPlan} facilities={facilities} beginMatch={beginPreparedMatch} cancel={() => setPreMatch(null)} /> : <MatchTab active={active} selectedId={selectedId} setSelectedId={setSelectedId} onAction={doAction} finishWeek={finishWeek} startMatch={startMatch} aiPaused={aiPaused} setAiPaused={setAiPaused} helpMode={helpMode} />)}
+      {tab === "match" && (preMatch && !active ? <PreMatchTab preMatch={preMatch} teams={teams} formation={formation} setFormation={setFormation} lineupOverrides={lineupOverrides} setLineupOverrides={setLineupOverrides} setTeamStyle={setTeamStyle} trainingPlan={trainingPlan} setTrainingPlan={setTrainingPlan} facilities={facilities} beginMatch={beginPreparedMatch} beginSim={beginPreparedSimulation} cancel={() => setPreMatch(null)} /> : <MatchTab active={active} selectedId={selectedId} setSelectedId={setSelectedId} onAction={doAction} finishWeek={finishWeek} startMatch={startMatch} aiPaused={aiPaused} setAiPaused={setAiPaused} helpMode={helpMode} />)}
       {tab === "schedule" && <ScheduleTab fixtures={fixtures} teams={teams} week={week} log={log} competitionState={competitionState} />}
       {tab === "champions" && <ChampionsTab teams={sorted} week={week} log={log} />}
       {tab === "table" && <TableTab teams={teams} />}
@@ -4050,8 +5507,8 @@ function LanMultiplayerScreen({ onBack, helpMode, notify }) {
   };
   const syncAction = async (action) => {
     if (!visibleGame || !side) return;
-    if (visibleGame.turn !== side && action.type !== "resumeGoal") { notify?.("Belum giliran kamu.", "warn"); return; }
-    const next = applyAction(visibleGame, action);
+    if (visibleGame.mode !== "realtimeSoccer" && visibleGame.turn !== side && action.type !== "resumeGoal") { notify?.("Belum giliran kamu.", "warn"); return; }
+    const next = visibleGame.mode === "realtimeSoccer" ? applyRealtimeAction({ ...visibleGame, userSide: side }, action) : applyAction(visibleGame, action);
     try {
       const data = await lanApi(`/rooms/${roomCode}/sync`, { clientId, game: { ...next, userSide: "home" }, eventText: next.lastAction || "Aksi match LAN." });
       setRoom(data.room);
@@ -4109,15 +5566,15 @@ function TrainingTab({ trainingPlan, setTrainingPlan, facilities, team, week }) 
   return <Section title="Latihan Mingguan" sub="Latihan sekarang benar-benar menaikkan EXP pemain saat 1 pekan terlewati. Hanya satu fokus aktif per pekan.">
     <div className="trainingSummary">
       <Card><h3>Fokus Pekan {week}</h3><p className="bigText">{plan.icon} {plan.label}</p><small>{plan.desc}</small></Card>
-      <Card><h3>Training Ground</h3><div className="infoGrid"><span>Level</span><b>{trainingLv}/5</b><span>Estimasi EXP senior</span><b>+{estimatedXp} s/d +{estimatedXp + 16}</b><span>Pemain senior</span><b>{seniorCount}</b></div></Card>
-      <Card><h3>Akademi</h3><div className="infoGrid"><span>Level</span><b>{academyLv}/5</b><span>EXP youth mingguan</span><b>+{academyXp} s/d +{academyXp + 26}</b><span>Talenta muda</span><b>{youthCount}</b></div></Card>
+      <Card><h3>Training Ground</h3><div className="infoGrid"><span>Level</span><b>{trainingLv}/3</b><span>Estimasi EXP senior</span><b>+{estimatedXp} s/d +{estimatedXp + 16}</b><span>Pemain senior</span><b>{seniorCount}</b></div></Card>
+      <Card><h3>Akademi</h3><div className="infoGrid"><span>Level</span><b>{academyLv}/3</b><span>EXP youth mingguan</span><b>+{academyXp} s/d +{academyXp + 26}</b><span>Talenta muda</span><b>{youthCount}</b></div></Card>
     </div>
     <div className="cardsGrid">{Object.entries(TRAINING_PLANS).map(([key, item]) => <button key={key} className={`trainingCard ${trainingPlan === key ? "active" : ""}`} onClick={() => setTrainingPlan(key)}><strong>{item.icon}</strong><b>{item.label}</b><span>{item.desc}</span><small>EXP diproses saat lanjut pekan · boost dipengaruhi Training Ground Lv {trainingLv}</small></button>)}</div>
     <Card className="tipCard"><h3>Catatan penting</h3><p>Jika EXP penuh, stat dan rating bisa naik. Pemain muda mendapat jalur tambahan dari Akademi, sedangkan pemain senior lebih kuat dari Training Ground. Fokus finishing/shooting sekarang masuk ke stat tembak.</p></Card>
   </Section>;
 }
 
-function PreMatchTab({ preMatch, teams, formation, setFormation, lineupOverrides, setLineupOverrides, setTeamStyle, trainingPlan, setTrainingPlan, facilities, beginMatch, cancel }) {
+function PreMatchTab({ preMatch, teams, formation, setFormation, lineupOverrides, setLineupOverrides, setTeamStyle, trainingPlan, setTrainingPlan, facilities, beginMatch, beginSim, cancel }) {
   const { fixture, userSide } = preMatch;
   const homeTeam = teamForFixture(teams, fixture.homeId, preMatch.season || 1, fixture.stage);
   const awayTeam = teamForFixture(teams, fixture.awayId, preMatch.season || 1, fixture.stage);
@@ -4132,7 +5589,7 @@ function PreMatchTab({ preMatch, teams, formation, setFormation, lineupOverrides
   const bench = userTeam.players.filter((p) => !usedIds.has(p.id) && p.injuredWeeks <= 0 && p.bannedWeeks <= 0).sort((a, b) => b.overall - a.overall);
   const changePlayer = (playerId) => setLineupOverrides((old) => ({ ...old, [selectedSlot]: playerId }));
   return <Section title="Pre-Match Formasi" sub="Klik MAIN PEKAN sekarang masuk ke ruang formasi dulu. Cek starting XI lawan, ubah formasi, ganti pemain dengan cadangan, pilih training plan, lalu mulai match.">
-    <div className="preMatchHero card"><div><p className="eyebrow">{fixture.cupName || leagueName(fixture.leagueKey) || "Liga"} · {fixture.stage || "Matchday"}</p><h3>{homeTeam.name} vs {awayTeam.name}</h3><p>{userSide === "home" ? "Kamu HOME" : "Kamu AWAY"} · Lawan gaya {enemyTeam.style} · Kick-off/restart dimulai dari penyerang, tetapi seluruh starting XI tetap di area sendiri sebelum garis tengah.</p></div><div className="preMatchActions"><button className="ghost" onClick={cancel}>Batal</button><button className="primary big" onClick={beginMatch}>Mulai Main</button></div></div>
+    <div className="preMatchHero card"><div><p className="eyebrow">{fixture.cupName || leagueName(fixture.leagueKey) || "Liga"} · {fixture.stage || "Matchday"}</p><h3>{homeTeam.name} vs {awayTeam.name}</h3><p>{userSide === "home" ? "Kamu HOME" : "Kamu AWAY"} · Lawan gaya {enemyTeam.style} · Kick-off/restart dimulai dari penyerang, tetapi seluruh starting XI tetap di area sendiri sebelum garis tengah.</p></div><div className="preMatchActions"><button className="ghost" onClick={cancel}>Batal</button><button className="ghost big simStart" onClick={beginSim}>📺 Main Simulate</button><button className="primary big" onClick={beginMatch}>Mulai Main</button></div></div>
     <div className="preMatchGrid">
       <Card><h3>Tim Kamu · {formation}</h3><div className="formationButtons compact">{Object.keys(FORMATIONS).map((f) => <button key={f} className={formation === f ? "active" : ""} onClick={() => { setFormation(f); setSelectedSlot(0); }}>{f}</button>)}</div><MiniPitch formation={formation} lineup={userLineup} selectedSlot={selectedSlot} setSelectedSlot={setSelectedSlot} /></Card>
       <Card><h3>Starting XI Kamu</h3><div className="lineupList editable">{userLineup.map(({ player, slot, manual }, idx) => <button key={`${slot.pos}-${player.id}-${idx}`} className={idx === selectedSlot ? "active" : ""} onClick={() => setSelectedSlot(idx)}><b>{slot.pos}</b><span>{player.name}</span><small>{manual ? "Manual" : player.trait}</small><strong>{player.overall}</strong></button>)}</div></Card>
@@ -4144,9 +5601,213 @@ function PreMatchTab({ preMatch, teams, formation, setFormation, lineupOverrides
   </Section>;
 }
 
+
+function RealtimeSoccerMatch({ active, selectedId, setSelectedId, onAction, finishWeek, aiPaused, setAiPaused, helpMode = false }) {
+  const game = active.game;
+  const selected = getPiece(game, selectedId || game.rt?.selectedId) || rtNearestToBall(game, game.userSide);
+  const carrier = getPiece(game, game.ballOwnerId);
+  const userCarrier = carrier?.side === game.userSide ? carrier : null;
+  const canControl = !game.ended && !game.goalPause && !game.rt?.paused;
+  const passTargets = userCarrier ? rtTeam(game, game.userSide).filter((p) => p.id !== userCarrier.id && p.role !== "GK").map((p) => ({ p, d: rtDist(userCarrier, p), forward: (p.ry - userCarrier.ry) * (userCarrier.side === "home" ? -1 : 1) })).sort((a, b) => (b.forward - a.forward) || (a.d - b.d)).slice(0, 5) : [];
+  const [subOpen, setSubOpen] = useState(false);
+  const viewMode = game.rt?.viewMode || "normal";
+  const switchTarget = rtSwitchTarget(game, game.userSide, selected?.id || game.rt?.selectedId);
+  const handleSwitch = () => { if (switchTarget) setSelectedId(switchTarget.id); onAction({ type: "switchPlayer", currentId: selected?.id || game.rt?.selectedId }); };
+  const handleKeeperRush = () => { const k = rtKeeperFor(game, game.userSide); if (k) setSelectedId(k.id); onAction({ type: "keeperRush" }); };
+  const keeperRushActive = rtKeeperRushActive(game, game.userSide);
+  return <Section title="Real-Time Football v14 Pro AI Fast Match" sub="Bola out/in aktif, kick-off aman di area sendiri, 1 menit game ≈ 1 detik real-time, stamina memengaruhi gerak, dan substitution dibatasi 3 pemain.">
+    <div className={`realMatchLayout proMobile ${viewMode === "3d" ? "view3d" : "view2d"}`}>
+      <Card className="realPitchCard">
+        <div className="realTopHud">
+          <div><b>{game.homeName}</b><small>{game.homeFormation} · {game.homeStyle}</small></div>
+          <strong><small>{formatClock(game)} {game.extraTimeStarted ? "· ET" : ""}</small>{game.score.home} - {game.score.away}</strong>
+          <div><b>{game.awayName}</b><small>{game.awayFormation} · {game.awayStyle}</small></div>
+        </div>
+        <div className="landscapeHint">Putar ke landscape untuk kontrol match paling nyaman</div>{game.rt?.ballState && (game.rt.ballState.until || 0) > rtLiveNow(game) && <div className={`ballStateChip ${game.rt.ballState.type}`}>{game.rt.ballState.label}<small>{game.rt.ballState.restart || "live"}</small></div>}
+        <RealFloatingInfo game={game} selected={selected} carrier={carrier} keeperRushActive={keeperRushActive} />
+        <RealtimeStaminaDock game={game} selected={selected} />
+        {game.goalPause && <GoalOverlay game={game} onResume={() => onAction({ type: "resumeGoal" })} />}
+        <RealtimePitch game={game} selectedId={selectedId || game.rt?.selectedId} setSelectedId={setSelectedId} onAction={onAction} canControl={canControl} viewMode={viewMode} />
+        {!game.ended && <div className="mobileGamepad">
+          <VirtualStick game={game} selected={selected} canControl={canControl} onAction={onAction} />
+          <div className="mobileActionCluster v12Cluster">
+            <button className="switchBtn" disabled={!canControl || !switchTarget} onClick={handleSwitch}>🔄<span>Switch</span></button>
+            <button className="keeperBtn" disabled={!canControl} onClick={handleKeeperRush}>🧤<span>Kiper</span></button>
+            <button className="skillBtn" disabled={!canControl || !userCarrier} onClick={() => onAction({ type: "skill", pieceId: userCarrier?.id })}>✨<span>Skill</span></button>
+            <button disabled={!canControl || !userCarrier} onClick={() => onAction({ type: "through", pieceId: userCarrier?.id })}>🪄<span>Through</span></button>
+            <button className="shootButton" disabled={!canControl || !userCarrier} onClick={() => onAction({ type: "shoot", pieceId: userCarrier?.id })}>🥅<span>Shoot</span></button>
+            <button disabled={!canControl || !userCarrier} onClick={() => onAction({ type: "pass", pieceId: userCarrier?.id })}>🎯<span>Pass</span></button>
+            <button disabled={!canControl || !selected || carrier?.side === game.userSide} onClick={() => onAction({ type: "tackle", pieceId: selected?.id })}>⚔️<span>Tackle</span></button>
+          </div>
+        </div>}
+      </Card>
+
+      <Card className="realControlsPanel proControlPanel">
+        <div className="realSelectedCard">
+          <b>{selected ? `${selected.role} ${selected.name}` : "Pilih pemain"}</b>
+          <small>{selected ? `${selected.trait || "-"} · OVR ${selected.overall} · Energy ${Math.round(selected.energy || 80)}%` : "Tap pemain di lapangan atau tombol switch."}</small>
+          <span>{carrier ? `Bola: ${carrier.role} ${firstName(carrier.name)} (${sideLabel(carrier.side)})` : "Bola liar"}</span>
+        </div>
+        <div className="realManagerBar">
+          {game.rt?.paused ? <button className="primary" onClick={() => onAction({ type: "start" })}>▶️ START</button> : <button className="ghost" onClick={() => onAction({ type: "pause" })}>⏸️ PAUSE</button>}
+          <button className="ghost" onClick={() => setSubOpen(true)}>🔁 Ganti {game.subCount?.[game.userSide] || 0}/3</button><button className="dangerBtn" disabled={game.ended} onClick={() => onAction({ type: "surrender" })}>🏳️ Surrender</button>
+          <button className="ghost" disabled={!canControl || !switchTarget} onClick={handleSwitch}>🔄 Switch</button>
+          <button className={viewMode === "normal" ? "active" : ""} onClick={() => onAction({ type: "toggleView", viewMode: "normal" })}>2D</button>
+          <button className={viewMode === "3d" ? "active" : ""} onClick={() => onAction({ type: "toggleView", viewMode: "3d" })}>3D</button>
+        </div>
+        {game.rt?.paused && <div className="realHelpBox startHint"><b>Match belum jalan</b><span>Tekan START. Pakai stick kiri untuk gerak pemain terpilih. AI v14 menjaga gaya main, role, compactness, pressing, keeper rush, switch dekat bola, out/in, dan stamina.</span></div>}
+        <div className="realActionGrid console">
+          <button disabled={!canControl || !selected} onClick={() => onAction({ type: "sprint", pieceId: selected?.id })}>💨 Sprint<small>Boost pendek</small></button>
+          <button disabled={!canControl || !switchTarget} onClick={handleSwitch}>🔄 Switch<small>{switchTarget ? `${switchTarget.role} ${firstName(switchTarget.name)}` : "dekat bola"}</small></button>
+          <button className={keeperRushActive ? "keeperActive" : ""} disabled={!canControl} onClick={handleKeeperRush}>🧤 Kiper Maju<small>{keeperRushActive ? "rush aktif" : "intercept"}</small></button>
+          <button disabled={!canControl || !userCarrier} onClick={() => onAction({ type: "skill", pieceId: userCarrier?.id })}>✨ Skill<small>Dribble move</small></button>
+          <button disabled={!canControl || !userCarrier} onClick={() => onAction({ type: "pass", pieceId: userCarrier?.id })}>🎯 Pass<small>target aman</small></button>
+          <button disabled={!canControl || !userCarrier} onClick={() => onAction({ type: "through", pieceId: userCarrier?.id })}>🪄 Through<small>umpan ruang</small></button>
+          <button className="shootButton" disabled={!canControl || !userCarrier} onClick={() => onAction({ type: "shoot", pieceId: userCarrier?.id })}>🥅 Shoot<small>arah gawang</small></button>
+          <button disabled={!canControl || !selected || carrier?.side === game.userSide} onClick={() => onAction({ type: "tackle", pieceId: selected?.id })}>⚔️ Tackle<small>rebut bola</small></button>
+        </div>
+        <RealQuickSwitch game={game} selectedId={selectedId || game.rt?.selectedId} setSelectedId={setSelectedId} />
+        {passTargets.length > 0 && <div className="realPassTargets"><b>Target oper cepat</b>{passTargets.map(({ p, d, forward }) => <button key={p.id} disabled={!canControl || !userCarrier} onClick={() => onAction({ type: forward > 7 ? "through" : "pass", pieceId: userCarrier?.id, targetId: p.id })}><span>{p.role} {firstName(p.name)}</span><small>{Math.round(d)}m · {forward > 7 ? "lari ke ruang" : "aman"}</small></button>)}</div>}
+        <h3>Kartu Taktik</h3><div className="tacticHand compactCards">{game.userCards?.map((c) => <button key={c.uid} disabled={!canControl} onClick={() => onAction({ type: "card", cardKey: c.key })}><b>{c.icon} {c.name}</b><small>{c.desc}</small></button>)}</div>
+      </Card>
+
+      <Card className="realScorePanel"><StatsBox game={game} />{game.ended && <MatchSummary game={game} finishWeek={finishWeek} />}<div className="history compactHistory">{game.history.slice(0, 7).map((h, i) => <div key={`${h.minute}-${i}`}><small>{h.minute}'</small><span>{h.icon}</span><p>{h.text}</p></div>)}</div></Card>
+      {subOpen && <RealSubModal game={game} selected={selected} setSelectedId={setSelectedId} onAction={onAction} onClose={() => setSubOpen(false)} />}
+    </div>
+  </Section>;
+}
+
+function RealFloatingInfo({ game, selected, carrier, keeperRushActive }) {
+  const low = rtTeam(game, game.userSide).filter((p) => rtAlive(game, p)).sort((a, b) => (a.energy || 80) - (b.energy || 80))[0];
+  return <div className="realFloatingInfo">
+    <span><b>{selected ? `${selected.role} ${firstName(selected.name)}` : "Pilih"}</b><small>OVR {selected?.overall || "-"} · STA {Math.round(selected?.energy || 0)}%</small></span>
+    <span><b>{carrier ? `${carrier.role} ${firstName(carrier.name)}` : "Bola liar"}</b><small>{carrier ? sideLabel(carrier.side) : "loose ball"}</small></span>
+    <span><b>Sub {game.subCount?.[game.userSide] || 0}/3</b><small>{keeperRushActive ? "Kiper maju aktif" : low ? `Stamina rendah: ${firstName(low.name)}` : "Shape normal"}</small></span>
+  </div>;
+}
+function RealtimeStaminaDock({ game, selected }) {
+  const mine = rtTeam(game, game.userSide).filter((p) => rtAlive(game, p));
+  const low = mine.slice().sort((a, b) => (a.energy || 80) - (b.energy || 80)).slice(0, 4);
+  const avg = Math.round(mine.reduce((sum, p) => sum + (p.energy || 80), 0) / Math.max(1, mine.length));
+  const rows = selected && selected.side === game.userSide ? [selected, ...low.filter((p) => p.id !== selected.id).slice(0, 3)] : low;
+  return <div className="realtimeStaminaDock">
+    <div className="teamStamina"><b>Stamina Tim</b><i><em style={{ width: `${clamp(avg, 0, 100)}%` }} /></i><small>{avg}%</small></div>
+    {rows.map((p) => <div key={p.id} className={`staminaChip ${selected?.id === p.id ? "active" : ""}`}><span>{p.role} {firstName(p.name)}</span><i><em style={{ width: `${clamp(p.energy || 0, 0, 100)}%` }} /></i><b>{Math.round(p.energy || 0)}%</b></div>)}
+  </div>;
+}
+function StaminaMiniList({ game, side }) {
+  const players = rtTeam(game, side).slice().sort((a, b) => (a.role === "GK" ? -1 : b.role === "GK" ? 1 : (a.energy || 80) - (b.energy || 80))).slice(0, 11);
+  return <div className="simStaminaList">{players.map((p) => <div key={p.id} className="simStaminaRow"><span>{p.role} {firstName(p.name)}</span><b>{Math.round(p.energy || 0)}%</b><i><em style={{ width: `${clamp(p.energy || 0, 0, 100)}%` }} /></i></div>)}</div>;
+}
+function QuickSimMatch({ active, selectedId, setSelectedId, onAction, finishWeek }) {
+  const game = active.game;
+  const [subOpen, setSubOpen] = useState(false);
+  const selected = getPiece(game, selectedId) || rtTeam(game, game.userSide).find((p) => p.role !== "GK") || rtTeam(game, game.userSide)[0];
+  const due = (game.sim?.timeline || []).filter((ev) => ev.min >= minuteOf(game)).slice(0, 5);
+  const important = isImportantEliminationGame(game);
+  return <Section title="Quick Sim Match" sub="AI memainkan pertandingan dengan cuplikan cepat. Kamu bisa pause, ganti pemain maksimal 3 kali, lalu lanjutkan simulasi.">
+    <div className="quickSimLayout">
+      <Card className="quickSimScore"><div className="simScoreHero"><span>{game.homeName}</span><strong>{game.score.home} - {game.score.away}</strong><span>{game.awayName}</span></div><div className="simClock"><b>{formatClock(game)}</b><span>{game.extraTimeStarted ? "Extra Time" : important ? "Important Match · ET/Pens aktif jika seri" : "AI Simulation"}</span></div>{game.penalty && <p className="simBadge">🎯 Penalty {game.penalty.home}-{game.penalty.away}</p>}<div className="simButtons">{game.ended ? <button className="primary" onClick={finishWeek}>Selesai & Lanjut Pekan</button> : game.sim?.paused ? <button className="primary" onClick={() => onAction({ type: "start" })}>▶️ Lanjut Sim</button> : <button className="ghost" onClick={() => onAction({ type: "pause" })}>⏸️ Pause</button>}<button className="ghost" disabled={game.ended} onClick={() => setSubOpen(true)}>🔁 Ganti Pemain {game.subCount?.[game.userSide] || 0}/3</button><button className="dangerBtn" disabled={game.ended} onClick={() => onAction({ type: "surrender" })}>🏳️ Surrender 0:3</button></div></Card>
+      <Card className="quickSimFeed"><h3>Cuplikan Live</h3><div className="simTimeline">{game.history.slice(0, 12).map((h, i) => <div key={`${h.minute}-${i}`} className={i === 0 ? "hot" : ""}><small>{h.minute}'</small><b>{h.icon}</b><p>{h.text}</p></div>)}</div></Card>
+      <Card><h3>Progress Aksi Berikutnya</h3>{due.length ? <div className="nextSimMoments">{due.map((ev) => <p key={ev.id}><b>{ev.min}'</b> {ev.type === "goal" ? "Potensi gol" : ev.type === "injury" ? "Risiko cedera" : ev.type === "sub" ? "Rencana pergantian" : ev.type === "yellow" || ev.type === "red" ? "Duel keras/kartu" : "Serangan/shot"} · {sideLabel(ev.side)}</p>)}</div> : <p className="muted">Menunggu aksi berikutnya...</p>}<div className="infoGrid"><span>Pergantian Home</span><b>{game.subCount?.home || 0}/3</b><span>Pergantian Away</span><b>{game.subCount?.away || 0}/3</b><span>Stamina memengaruhi</span><b>pace, tackle, cedera</b></div></Card>
+      <Card><h3>Stamina Tim Kamu</h3><StaminaMiniList game={game} side={game.userSide} /></Card>
+      <Card><h3>Stamina Lawan</h3><StaminaMiniList game={game} side={otherSide(game.userSide)} /></Card>
+    </div>
+    {subOpen && <RealSubModal game={game} selected={selected} setSelectedId={setSelectedId} onAction={onAction} onClose={() => setSubOpen(false)} />}
+  </Section>;
+}
+function VirtualStick({ game, selected, canControl, onAction }) {
+  const [vec, setVec] = useState({ x: 0, y: 0, mag: 0 });
+  const activeRef = React.useRef(false);
+  const boxRef = React.useRef(null);
+  const lastSendRef = React.useRef(0);
+  const selectedIdRef = React.useRef(selected?.id);
+  selectedIdRef.current = selected?.id;
+  const sendStick = (v, force = false) => {
+    if (!selectedIdRef.current || !canControl) return;
+    const now = performance.now();
+    if (!force && now - lastSendRef.current < 22) return;
+    lastSendRef.current = now;
+    onAction({ type: "stick", pieceId: selectedIdRef.current, x: v.x, y: v.y, mag: v.mag });
+  };
+  const calc = (e) => {
+    const rect = boxRef.current?.getBoundingClientRect();
+    if (!rect) return { x: 0, y: 0, mag: 0 };
+    const cx = rect.left + rect.width / 2;
+    const cy = rect.top + rect.height / 2;
+    const dx = e.clientX - cx;
+    const dy = e.clientY - cy;
+    const max = rect.width * 0.40;
+    const d = Math.hypot(dx, dy);
+    const raw = clamp(d / max, 0, 1);
+    const dead = 0.055;
+    const m = raw < dead ? 0 : clamp((raw - dead) / (1 - dead), 0, 1);
+    return { x: d ? (dx / d) * m : 0, y: d ? (dy / d) * m : 0, mag: m };
+  };
+  useEffect(() => {
+    if (!canControl || !selected?.id) return undefined;
+    const id = setInterval(() => {
+      if (!activeRef.current) return;
+      sendStick(vec, true);
+    }, 33);
+    return () => clearInterval(id);
+  }, [canControl, selected?.id, vec.x, vec.y, vec.mag]);
+  const release = () => {
+    activeRef.current = false;
+    const zero = { x: 0, y: 0, mag: 0 };
+    setVec(zero);
+    sendStick(zero, true);
+  };
+  return <div className={`virtualStick proStick ${!canControl ? "disabled" : ""} ${vec.mag > RT_STICK_SPRINT_ZONE ? "sprint" : ""}`} ref={boxRef}
+    onPointerDown={(e) => { activeRef.current = true; e.currentTarget.setPointerCapture?.(e.pointerId); const v = calc(e); setVec(v); sendStick(v, true); }}
+    onPointerMove={(e) => { if (activeRef.current) { const v = calc(e); setVec(v); sendStick(v); } }}
+    onPointerUp={release}
+    onPointerCancel={release}
+    onLostPointerCapture={release}>
+      <i style={{ transform: `translate(calc(-50% + ${vec.x * 38}px), calc(-50% + ${vec.y * 38}px))` }} />
+      <b>{vec.mag > RT_STICK_SPRINT_ZONE ? "SPRINT" : "STICK"}</b><small>{selected ? firstName(selected.name) : "Pilih"}</small>
+    </div>;
+}
+function RealQuickSwitch({ game, selectedId, setSelectedId }) {
+  const mine = rtSwitchCandidates(game, game.userSide).concat(rtTeam(game, game.userSide).filter((p) => p.role === "GK"));
+  return <div className="realQuickSwitch"><b>Switch pemain dekat bola</b><div>{mine.map((p) => <button key={p.id} className={`${selectedId === p.id ? "active" : ""} ${game.ballOwnerId === p.id ? "carrier" : ""} ${p.role === "GK" ? "keeperChip" : ""}`} onClick={() => setSelectedId(p.id)}>{game.ballOwnerId === p.id ? "⚽" : p.role === "GK" ? "🧤" : "•"} {p.role} {firstName(p.name)}</button>)}</div></div>;
+}
+function RealSubModal({ game, selected, setSelectedId, onAction, onClose }) {
+  const [outId, setOutId] = useState(selected?.side === game.userSide ? selected.id : rtTeam(game, game.userSide)[0]?.id);
+  const [query, setQuery] = useState("");
+  const outPiece = getPiece(game, outId);
+  const q = query.trim().toLowerCase();
+  const onField = rtTeam(game, game.userSide).filter((p) => p.role !== "GK" || (game.bench?.[game.userSide] || []).some((b) => b.pos === "GK"));
+  const bench = (game.bench?.[game.userSide] || []).filter((p) => p && (p.injuredWeeks || 0) <= 0 && (p.bannedWeeks || 0) <= 0 && (!q || `${p.name} ${p.pos} ${p.trait || ""}`.toLowerCase().includes(q))).sort((a, b) => (outPiece ? benchFitScore(b, outPiece.role, outPiece.overall) - benchFitScore(a, outPiece.role, outPiece.overall) : b.overall - a.overall));
+  const subLimit = (game.subCount?.[game.userSide] || 0) >= SUBSTITUTION_LIMIT;
+  return <div className="modalOverlay realSubOverlay" onClick={onClose}><Card className="realSubModal" onClick={(e) => e.stopPropagation()}><div className="modalHeader"><div><h2>🔁 Ganti Pemain</h2><p>Pilih pemain keluar, cari cadangan, lalu masukkan. Bisa dilakukan saat pause.</p></div><button onClick={onClose}>✕</button></div>
+    <div className="realSubGrid"><div><b>Pemain Lapangan</b><div className="subScroll fieldList">{onField.map((p) => <button key={p.id} className={outId === p.id ? "active" : ""} onClick={() => { setOutId(p.id); setSelectedId(p.id); }}><span>{p.role} {firstName(p.name)}</span><small>OVR {p.overall} · Energy {Math.round(p.energy || 80)}%</small></button>)}</div></div>
+    <div><b>Cadangan</b><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Cari nama / posisi..." /><div className="subScroll benchListPro">{bench.map((p) => { const fit = outPiece ? benchFitScore(p, outPiece.role, outPiece.overall) : 0; const exact = outPiece && p.pos === outPiece.role; return <button key={p.id} disabled={subLimit || !outPiece} onClick={() => { onAction({ type: "sub", pieceId: outPiece.id, benchId: p.id }); onClose(); }}><span>{p.pos} {firstName(p.name)} <em>{exact ? "posisi asli" : fit > 0 ? "cocok" : "darurat"}</em></span><small>OVR {p.overall} · Fit {p.fitness || 90}% · skor cocok {fit}</small></button>; })}</div></div></div>
+    {subLimit && <p className="dangerText">Batas pergantian 3 pemain sudah habis.</p>}
+  </Card></div>;
+}
+function RealtimePitch({ game, selectedId, setSelectedId, onAction, canControl, viewMode = "normal" }) {
+  const ball = game.ball || { x: FIELD_W / 2, y: FIELD_H / 2 };
+  const pieces = (game.pieces || []).filter((p) => rtAlive(game, p));
+  const sorted = pieces.slice().sort((a, b) => a.ry - b.ry);
+  return <div className={`realPitch ${viewMode === "3d" ? "is3d" : "is2d"}`}>
+    <div className="realHalfLine" /><div className="realCenterCircle" /><div className="realBox top" /><div className="realBox bottom" /><div className="realGoal top" /><div className="realGoal bottom" />
+    {sorted.map((p) => {
+      const left = `${clamp(p.rx ?? gridToFieldX(p.x), 0, FIELD_W)}%`;
+      const top = `${(clamp(p.ry ?? gridToFieldY(p.y), 0, FIELD_H) / FIELD_H) * 100}%`;
+      return <button key={p.id} className={`realPlayer ${p.side} ${p.side === game.userSide ? "mine" : ""} ${selectedId === p.id ? "selected" : ""} ${game.ballOwnerId === p.id ? "hasBall" : ""} ${p.vacant ? "vacant" : ""} ${viewMode === "3d" ? "stickman" : ""}`} style={{ left, top }} onClick={(e) => { e.stopPropagation(); if (p.side === game.userSide) setSelectedId(p.id); }}>
+        {viewMode === "3d" ? <><i className="head" /><i className="body" /><i className="leg l1" /><i className="leg l2" /></> : <><b>{p.role}</b><small>{Math.round(p.overall)}</small></>}<span>{firstName(p.name)}</span><div className="rtEnergyBar"><i style={{ width: `${clamp(p.energy || 0, 0, 100)}%` }} /></div>{game.ballOwnerId === p.id && <em>⚽</em>}
+      </button>;
+    })}
+    <span className={`realBall ${game.ballOwnerId ? "owned" : "free"}`} style={{ left: `${clamp(ball.x, 0, FIELD_W)}%`, top: `${clamp(ball.y, 0, FIELD_H) / FIELD_H * 100}%` }}>⚽</span>
+  </div>;
+}
+
 function MatchTab({ active, selectedId, setSelectedId, onAction, finishWeek, startMatch, aiPaused, setAiPaused, helpMode = false, tutorialStep = null }) {
   if (!active) return <Section title="Match" sub="Belum ada pertandingan aktif."><Card className="empty"><h3>Belum mulai</h3><p>Klik MAIN PEKAN untuk membuka pertandingan playable.</p><button className="primary" onClick={startMatch}>Main Pekan</button></Card></Section>;
   const game = active.game;
+  if (game.mode === "realtimeSoccer") return <RealtimeSoccerMatch active={active} selectedId={selectedId} setSelectedId={setSelectedId} onAction={onAction} finishWeek={finishWeek} aiPaused={aiPaused} setAiPaused={setAiPaused} helpMode={helpMode} />;
+  if (game.mode === "quickSim") return <QuickSimMatch active={active} selectedId={selectedId} setSelectedId={setSelectedId} onAction={onAction} finishWeek={finishWeek} />;
   const humanTurn = game.turn === game.userSide && !game.ended && !game.goalPause;
   const selected = getPiece(game, selectedId);
   const carrier = getPiece(game, game.ballOwnerId);
@@ -4236,8 +5897,8 @@ function SubstitutionBox({ game, piece, humanTurn, onAction }) {
   const source = mode === "all" ? allBench.slice().sort((a, b) => b.overall - a.overall) : fitOptions;
   const options = source.filter((p) => !q || `${p.name} ${p.pos} ${p.trait || ""}`.toLowerCase().includes(q));
   if (!allBench.length) return <div className="subBox"><b>🔁 Substitution</b><small>Tidak ada pemain cadangan yang bisa masuk.</small></div>;
-  const subLimit = (game.subCount?.[piece.side] || 0) >= 5;
-  return <div className="subBox subBoxPro"><b>🔁 Substitution {game.subCount?.[piece.side] || 0}/5</b><small>Cari semua pemain skuad yang tidak sedang di lapangan, scroll daftar, dan pilih yang posisinya paling cocok untuk {piece.role}. Pergantian tidak memakai AP, kecuali pemain normal keluar tetap memakan sedikit waktu.</small>
+  const subLimit = (game.subCount?.[piece.side] || 0) >= SUBSTITUTION_LIMIT;
+  return <div className="subBox subBoxPro"><b>🔁 Substitution {game.subCount?.[piece.side] || 0}/3</b><small>Cari semua pemain skuad yang tidak sedang di lapangan, scroll daftar, dan pilih yang posisinya paling cocok untuk {piece.role}. Pergantian tidak memakai AP, kecuali pemain normal keluar tetap memakan sedikit waktu.</small>
     <div className="subTools"><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Cari nama / posisi..." /><div><button className={mode === "fit" ? "active" : ""} onClick={() => setMode("fit")}>Cocok Posisi</button><button className={mode === "all" ? "active" : ""} onClick={() => setMode("all")}>Semua Skuad</button></div></div>
     <div className="subScroll">{options.map((p) => { const fit = benchFitScore(p, piece.role, piece.overall); const exact = p.pos === piece.role; return <button key={p.id} disabled={!humanTurn || subLimit} onClick={() => onAction({ type: "sub", pieceId: piece.id, benchId: p.id })}><b>{p.pos} {firstName(p.name)}</b><span>{exact ? "✅ posisi asli" : (COMPATIBLE[piece.role] || []).includes(p.pos) ? "↔️ kompatibel" : "⚠️ darurat"}</span><small>OVR {p.overall} · Fit {p.fitness || 90}% · Skor cocok {fit}</small></button>; })}</div>
   </div>;
@@ -4279,7 +5940,7 @@ function getCoachHint(game) {
   if (tackler?.t) return `Tackle dengan ${firstName(tackler.p.name)}: ${tackler.t.chance}%.`;
   return `Tutup jalur ${firstName(carrier.name)}. Pilih pemain dekat lalu run mendekat.`;
 }
-function Scoreboard({ game }) { return <div className="scoreboard"><div><b>{game.homeName}</b><span>Home · {game.homeFormation} · {game.homeStyle}</span></div><strong><small>{formatClock(game)}</small>{game.score.home} - {game.score.away}</strong><div><b>{game.awayName}</b><span>Away · {game.awayFormation} · {game.awayStyle}</span></div></div>; }
+function Scoreboard({ game }) { return <div className="scoreboard"><div><b>{game.homeName}</b><span>Home · {game.homeFormation} · {game.homeStyle}</span></div><strong><small>{formatClock(game)} {game.extraTimeStarted ? "· ET" : ""}</small>{game.score.home} - {game.score.away}</strong><div><b>{game.awayName}</b><span>Away · {game.awayFormation} · {game.awayStyle}</span></div></div>; }
 function Board({ game, selectedId, setSelectedId, runCells, passes, throughs, tackles, onAction, humanTurn, helpMode = false }) {
   const runKey = new Map(runCells.map((c) => [`${c.x}-${c.y}`, c]));
   const passIds = new Map(passes.map((p) => [p.target.id, p]));
@@ -4517,7 +6178,7 @@ function YouthTab({ team, facilities, week = 1, sell, listLoan, promoteYouth, ch
   const topYouth = academyList[0] || seniorYoung[0];
   return <Section title="Youth Academy & Growth" sub={`Akademi Lv ${academyLevel}. Tombol promosi hanya muncul untuk pemain berstatus Akademi. Setelah klik, promosi diproses saat Lanjut Pekan.`}>
     <div className="youthSummary">
-      <Card><h3>🌱 Akademi Aktif</h3><div className="infoGrid"><span>Level Akademi</span><b>{academyLevel}/5</b><span>Pemain akademi</span><b>{academyList.length}</b><span>Pemain muda senior</span><b>{seniorYoung.length}</b><span>Chance breakthrough</span><b>±{breakthroughChance}%/pekan</b><span>EXP dasar</span><b>+{academyLevel * 6}/pekan</b><span>Refresh</span><b>Pekan 20/40/60</b></div></Card>
+      <Card><h3>🌱 Akademi Aktif</h3><div className="infoGrid"><span>Level Akademi</span><b>{academyLevel}/3</b><span>Pemain akademi</span><b>{academyList.length}</b><span>Pemain muda senior</span><b>{seniorYoung.length}</b><span>Chance breakthrough</span><b>±{breakthroughChance}%/pekan</b><span>EXP dasar</span><b>+{academyLevel * 6}/pekan</b><span>Refresh</span><b>Pekan 20/40/60</b></div></Card>
       <Card><h3>Promosi ke Skuad Utama</h3><p>Pilih pemain dengan label <b>Akademi</b>, klik <b>Panggil ke Skuad Utama</b>, lalu tekan <b>Lanjut Pekan</b>. Pemain baru masuk senior setelah 1 pekan, dengan gaji dan kontrak otomatis.</p></Card>
       <Card><h3>Laporan Pelatih</h3><p>{topYouth ? `${topYouth.name} paling menarik saat ini: ${topYouth.pos} OVR ${topYouth.overall}, ${topYouth.scouted ? `POT ${topYouth.potential}` : "POT belum dibuka"}. Mental: ${topYouth.personality}.` : "Belum ada pemain youth."}</p></Card>
       <Card><h3>Refresh Akademi 20 Pekan</h3><p>Setiap pekan 20, 40, dan 60 daftar akademi diganti fresh. Pemain yang sudah masuk skuad utama, sedang menunggu promosi, ditandai jual, ditandai loan, atau punya offer tetap aman dan tidak dihapus.</p><div className="infoGrid"><span>Refresh berikutnya</span><b>Pekan {nextRefresh}</b><span>Dilindungi</span><b>Senior / Listed / Pending</b></div></Card>
@@ -4575,7 +6236,7 @@ function FacilitiesTab({ facilities, cash, upgrade }) {
     <div className="cardsGrid">{Object.entries(FACILITY_DEF).map(([key, def]) => {
       const level = facilities[key];
       const cost = Math.round(def.baseCost * Math.pow(1.65, level - 1));
-      return <Card key={key}><h3>{def.icon} {def.label}</h3><p>{def.desc}</p><div className="facilityLevel">Level {level}/5</div><div className="facilityImpact">{impact[key]?.(level) || "Meningkatkan kualitas klub."}</div><button disabled={level >= 5 || cash < cost} onClick={() => upgrade(key)}>{level >= 5 ? "Maks" : `Upgrade ${money(cost)}`}</button></Card>;
+      return <Card key={key}><h3>{def.icon} {def.label}</h3><p>{def.desc}</p><div className="facilityLevel">Level {level}/3</div><div className="facilityImpact">{impact[key]?.(level) || "Meningkatkan kualitas klub."}</div><button disabled={level >= 3 || cash < cost} onClick={() => upgrade(key)}>{level >= 3 ? "Maks" : `Upgrade ${money(cost)}`}</button></Card>;
     })}</div>
   </Section>;
 }

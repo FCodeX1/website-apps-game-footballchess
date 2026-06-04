@@ -1,0 +1,49 @@
+UPDATE BESAR V14 - PRO AI FAST MOBILE
+
+Fokus update:
+1. AI TEAM MATCH DIPERBAIKI LAGI
+- AI off-ball sekarang memakai target shape tim, bukan hanya bergerak ke titik random.
+- Pemain menjaga role band masing-masing: CB/LB/RB/CDM lebih disiplin, CM/CAM mengisi half-space, winger tetap melebar, ST mencari ruang depan.
+- AI mengikuti gaya main:
+  - Possession/Tiki Taka lebih sabar dan banyak support.
+  - Vertical Tiki Taka lebih cepat ke depan tapi tetap punya triangle support.
+  - Counter/Long Ball lebih direct.
+  - Wing Play lebih melebar.
+  - Park Bus/Catenaccio lebih compact dan tidak mudah meninggalkan shape.
+  - High Press/Gegenpress lebih agresif tetapi tetap dibatasi agar tidak semua pemain mengejar bola.
+- Added congestion resolver: pemain menghindari titik yang terlalu ramai agar tidak menumpuk.
+- Passing decision AI ditambah bias: membaca pressure, style, risiko lane, forward run, dan shooting window.
+- AI carrier tidak langsung shoot/pass sembarangan; sekarang memilih shoot, pass, through, atau dribble berdasarkan situasi.
+
+2. WAKTU GAME DIPERCEPAT
+- Sekarang 1 menit di game kira-kira sama dengan 1 detik real-time.
+- Physics gerakan tetap memakai tick kecil agar pemain tidak teleport / patah-patah.
+- Clock match dipisahkan dari physics movement, jadi match cepat selesai tetapi animasi tetap lebih halus.
+
+3. STAMINA BAR DI GAMEPLAY
+- Stamina bar pemain di lapangan diperbesar dan dibuat lebih jelas.
+- Ditambahkan floating stamina dock di dalam gameplay:
+  - stamina rata-rata tim,
+  - pemain terpilih,
+  - pemain yang stamina rendah.
+- Stamina tetap memengaruhi speed, sprint, tackle, cedera, dan duel.
+
+4. MOBILE RESPONSIVE PORTRAIT + LANDSCAPE
+- Portrait:
+  - pitch tetap utama,
+  - stick dan tombol aksi tetap di bawah,
+  - info match tampil sebagai floating chips,
+  - stamina dock tetap muncul tapi dibuat compact.
+- Landscape:
+  - pitch/board menjadi tampilan utama fullscreen di kiri,
+  - sidebar kanan berisi START/PAUSE, ganti pemain, surrender, switch, 2D/3D, kartu taktik, dan quick switch,
+  - scoreboard/waktu tetap di bar atas,
+  - info dipindah menjadi popup/floating chips tepat di bawah scoreboard,
+  - statistik dibuat popup semi-transparan kecil agar tidak menutup pitch.
+
+5. BUG SAFETY
+- Timer manual control, sprint, keeper rush, ball in/out, dan tackle cooldown dipindahkan ke liveSeconds supaya tidak rusak walau clock match dipercepat.
+- Build sudah ditest dengan npm run build dan berhasil.
+
+Catatan:
+V14 fokus ke gameplay feel, AI team shape, stamina visibility, dan responsive mobile landscape/portrait.

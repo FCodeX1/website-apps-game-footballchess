@@ -1,0 +1,81 @@
+UPDATE BESAR V9 - PRO REALTIME FOOTBALL CONTROL
+
+Fokus utama:
+- Gameplay realtime v8 yang terasa acak dirapikan ulang menjadi sistem kontrol stick dan AI shape yang lebih stabil.
+- UI gameplay dibuat mendekati pola mobile football game: stick kiri, tombol aksi kanan, HUD skor di atas, quick switch, start/pause, dan pergantian pemain cepat.
+- Ditambahkan pilihan tampilan Normal 2D atau 3D stickman.
+
+Detail update gameplay:
+1. Kontrol sekarang memakai virtual stick.
+   - Gerak pemain tidak lagi mengandalkan tap area lapangan.
+   - Stick kiri menggerakkan pemain terpilih secara manual.
+   - Jika stick ditarik kuat, pemain otomatis sprint pendek.
+   - Log gerakan stick tidak lagi memenuhi history match.
+
+2. Tombol aksi ala game bola mobile.
+   - Pass.
+   - Through.
+   - Shoot.
+   - Skill move.
+   - Tackle.
+   - Sprint.
+   - Quick switch pemain.
+   - Tombol START dan PAUSE.
+   - Tombol Ganti Pemain.
+
+3. Match sekarang mulai dalam keadaan pause/start screen.
+   - User masuk match dulu.
+   - Lihat formasi, pilih view, pilih pemain, lalu tekan START.
+   - Bisa pause untuk ganti pemain atau baca situasi.
+
+4. AI movement dibuat lebih rapi.
+   - AI tidak lagi bergerak random ke banyak arah.
+   - Team shape bergeser sebagai satu unit mengikuti bola.
+   - Pemain menjaga zona sesuai role: bek, gelandang, winger, striker, keeper.
+   - Pemain terdekat saja yang press bola, pemain lain tetap jaga formasi.
+   - AI dengan bola tidak lagi asal lari random, tetapi memilih: shoot jika dekat, pass jika ditekan, dribble sesuai lane jika ruang terbuka.
+
+5. Positioning realtime diperbaiki.
+   - Starting position realtime memakai koordinat lapangan khusus, bukan hanya mapping grid.
+   - Role striker/winger/CAM tetap tidak melewati area yang aneh saat awal.
+   - Keeper menjaga area gawang.
+   - Bek dan gelandang tidak saling menumpuk.
+
+6. Collision/spacing diperbaiki.
+   - Ditambahkan spacing resolver agar pemain tidak terlalu menumpuk.
+   - Setelah bergerak, pemain diberi jarak minimum antarpemain.
+   - Posisi grid internal tetap disinkronkan ke posisi realtime.
+
+7. Bola dan kickoff.
+   - Kickoff tetap ke pemain penyerang.
+   - Setelah gol, restart tetap ke pemain penyerang pihak yang kebobolan.
+   - Bola mengikuti carrier lebih halus.
+
+8. Skill move baru.
+   - Tombol skill memakai stat dribble dan overall.
+   - Jika sukses, pemain melakukan burst kecil membuka ruang.
+   - Jika gagal saat ditekan, ada risiko bola direbut.
+
+9. Substitution realtime baru.
+   - Tombol Ganti Pemain membuka modal khusus.
+   - Pilih pemain lapangan yang mau keluar.
+   - Search pemain cadangan.
+   - Cadangan disortir berdasarkan kecocokan posisi.
+   - Bisa dipakai saat pause agar mobile tidak berantakan.
+
+10. Tampilan 2D dan 3D.
+   - Mode 2D normal tetap ada.
+   - Mode 3D stickman ditambahkan.
+   - 3D memakai perspektif lapangan dan karakter stickman sederhana.
+   - User bisa toggle langsung dari panel gameplay.
+
+11. Mobile responsive.
+   - HUD skor jadi overlay kecil di atas lapangan.
+   - Stick kiri dan tombol aksi kanan menempel di bawah pitch.
+   - Panel aksi desktop disembunyikan di mobile agar lapangan lebih lega.
+   - Substitution modal dibuat satu kolom di mobile.
+   - Tombol dibuat lebih besar agar nyaman disentuh.
+
+Build test:
+- npm install berhasil.
+- npm run build berhasil.

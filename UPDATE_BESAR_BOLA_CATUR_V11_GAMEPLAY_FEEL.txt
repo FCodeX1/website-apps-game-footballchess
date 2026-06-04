@@ -1,0 +1,54 @@
+UPDATE BESAR V11 - GAMEPLAY FEEL, MOBILE RESPONSIVE, AI TEAM MATCH
+
+Build test: npm run build BERHASIL.
+
+Fokus v11:
+1. Kontrol stick dibuat jauh lebih responsif.
+   - Frame realtime dipercepat dari 45ms ke 33ms.
+   - Tick gameplay diperkecil dari 0.28s ke 0.18s agar input terasa langsung.
+   - Virtual stick sekarang mengirim input langsung ke game state lewat action `stick`, bukan hanya klik move berkala yang terasa telat.
+   - Ada deadzone kecil agar stick tidak bergerak sendiri.
+   - Sprint otomatis aktif saat stick ditekan jauh.
+   - Saat stick dilepas, pemain berhenti lebih natural dan tidak terus diambil alih AI.
+
+2. Tombol aksi membaca arah stick.
+   - Pass membaca arah stick untuk memilih target oper paling sesuai.
+   - Through ball membaca arah stick dan bisa mengarah ke ruang kosong.
+   - Shoot membaca arah stick untuk mengarahkan tembakan ke sisi gawang.
+   - Skill move membaca arah stick sehingga arah dribble tidak acak.
+
+3. Pergerakan pemain dibuat lebih natural.
+   - Movement memakai velocity sederhana, akselerasi, easing, dan facing direction.
+   - Dribble tidak terlalu kaku; bola mengikuti kaki pemain dengan offset kecil sesuai arah gerak.
+   - Movement target AI dismoothing agar tidak jitter/acak kiri-kanan.
+   - Pemain user yang sedang dipilih tidak diambil alih AI saat stick diam.
+
+4. AI team match diperbaiki lagi.
+   - Saat loose ball, hanya intended receiver dan pemain terdekat yang mengejar; pemain lain menjaga second ball.
+   - AI support/defense tetap menjaga shape dan targetnya diblend supaya tidak acak.
+   - Target pass AI tetap memakai risk lane, marking, forward run, dan jarak.
+   - Pressing tidak membuat seluruh tim mengejar bola.
+
+5. Ball physics dan finishing diperbaiki.
+   - Pass/through punya speed dan target ruang yang lebih rapi.
+   - Shoot punya arah berdasarkan stick dan chance lebih realistis.
+   - Kiper sekarang bisa melakukan save/tepisan saat bola on target, jadi tembakan tidak otomatis gol setiap masuk area gawang.
+   - Stat saves ditambah saat kiper berhasil menepis.
+
+6. UI mobile dan desktop dipoles.
+   - Tombol gameplay dibuat lebih besar, lebih tegas, dan punya efek tekan cepat.
+   - Stick dibuat lebih jelas, ada indikator SPRINT.
+   - Tombol shoot/skill diberi visual lebih kuat.
+   - Match mobile portrait menampilkan hint landscape.
+   - Mode landscape punya layout match yang lebih penuh layar.
+   - Touch-action disesuaikan agar tombol dan stick terasa cepat di mobile.
+
+7. Modal ganti pemain diperbaiki.
+   - Overlay tidak transparan lagi.
+   - Modal background solid/gelap.
+   - Input, list pemain lapangan, dan list cadangan dibuat lebih jelas.
+   - Tombol cadangan lebih nyaman ditekan di mobile.
+
+Catatan:
+- V11 tetap mempertahankan 2D dan 3D stickman.
+- Career system, transfer, youth, story, inbox, calendar, dan fitur sebelumnya tetap dipertahankan.

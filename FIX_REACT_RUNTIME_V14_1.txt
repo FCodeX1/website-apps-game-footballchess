@@ -1,0 +1,16 @@
+FIX V14.1 - React Runtime / useState
+
+Masalah yang diperbaiki:
+- Error render: TypeError: Cannot read properties of null (reading 'useState').
+- Penyebab paling umum di Vite dev adalah React ter-resolve ganda / cache optimizeDeps lama setelah file update besar.
+
+Perbaikan yang dimasukkan:
+1. Import hook di App.jsx dibuat dari satu objek React yang sama.
+2. vite.config.js diberi resolve.dedupe untuk react dan react-dom.
+3. vite.config.js diberi alias lokal react/react-dom agar renderer dan hook memakai instance yang sama.
+4. optimizeDeps.force diaktifkan agar cache Vite di-refresh saat dev.
+5. script dev memakai --force.
+
+Jika masih muncul setelah ekstrak:
+- Hapus folder node_modules/.vite, lalu jalankan npm install dan npm run dev.
+- Jangan gabungkan file zip ini ke folder lama yang masih menyimpan cache Vite rusak; ekstrak ke folder baru lebih aman.

@@ -1,0 +1,16 @@
+UPDATE V15 TEAM SHAPE AI
+
+Fokus update:
+- Saat pemain pembawa bola masuk ke zona musuh, pemain lain sekarang ikut mencari ruang dan peluang.
+- Pemain yang ikut menyerang: ST, LW, RW, CAM, CM, LM, RM, dan CDM sebagai support belakang.
+- Bagian bertahan dan kiper tidak ikut naik liar. CB/GK tetap menjaga rest-defense, LB/RB hanya menjadi outlet aman sesuai gaya main.
+- AI menyerang sekarang punya open-space scoring: membaca jarak musuh, jarak teman, risiko jalur oper, offside, lebar lapangan, progres ke gawang, dan kecocokan role.
+- Penyerang lebih sering membuka channel, sayap melebar/diagonal, CAM masuk antar lini, CM/LM/RM jadi opsi cutback, CDM menjaga bola kedua.
+- Saat tim diserang, bek dan gelandang turun lebih disiplin.
+- CB menjaga garis antara bola dan gawang, LB/RB tracking sisi, CDM/CM menutup jalur oper, LM/RM turun menutup wing, CAM shadow press, penyerang tetap jadi outlet counter.
+- Hanya 1-2 pemain melakukan press; pemain lain tidak lagi mengejar bola semua.
+- Shape team lebih compact dan transisi attack/defense lebih terasa mengikuti posisi bola.
+
+Catatan build:
+- Build test berhasil dengan npm run build.
+- Update ini melanjutkan v14.1 React runtime fix, jadi fix useState tetap ikut.
