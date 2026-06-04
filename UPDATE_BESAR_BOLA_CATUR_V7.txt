@@ -1,0 +1,41 @@
+UPDATE BESAR BOLA CATUR ARENA - V7
+
+Fokus update v7:
+1. Transfer masuk dibatasi 1x per pekan selama transfer window.
+   - Buy dan loan dicek dua lapis: tombol UI dan fungsi eksekusi.
+   - Setelah 1 transaksi masuk di pekan yang sama, tombol buy/loan terkunci sampai pekan berikutnya.
+
+2. Pemain beli/loan tidak langsung masuk skuad.
+   - Setelah deal, pemain masuk daftar pending transfer.
+   - Pemain baru tersedia di skuad utama setelah pekan berganti.
+   - Inbox/Transfer menampilkan status registrasi: nama pemain dan pekan kedatangan.
+   - Transfer permanen dan loan dibuat berbeda statusnya.
+
+3. Scout random diperbaiki total.
+   - Scout random sekarang hanya menghasilkan 1 pemain, tidak bisa 2.
+   - Saat scout baru dikirim, nama pemain belum muncul; hanya tertulis target anonim.
+   - Selama scout random berjalan, scout lain tidak bisa dikirim.
+   - Setelah report selesai, info masuk ke Inbox/Transfer.
+   - Report sudah berisi nama, posisi, rating, potensi, harga, gaji estimasi, trait, mental, dan stat.
+   - Dari detail report, user bisa kontrak sementara/loan, beli permanen, atau tolak report.
+
+4. Positioning kickoff/formasi diperbaiki.
+   - Board dibuat lebih compact: 9x14.
+   - Posisi awal tetap tidak melewati garis tengah.
+   - Penempatan pemain memakai role-line: GK, defender, CDM, midfield, attacking line.
+   - Formasi tidak lagi terlalu menyebar aneh/menumpuk karena scaling board lama.
+   - Bola kickoff dan restart setelah gol tetap ke pemain menyerang.
+
+5. Pergantian pemain gameplay diperbaiki.
+   - Bench match sekarang mengambil semua pemain senior yang tidak sedang di lapangan, bukan hanya sebagian.
+   - Panel substitution tetap bisa search dan scroll.
+   - Tombol filter diganti menjadi Cocok Posisi dan Semua Skuad.
+
+6. Mobile responsive dipoles lagi.
+   - Board compact lebih ringan di layar mobile.
+   - Layout gameplay tetap single-column di mobile.
+   - Board/action/pre-match/tabs tetap tidak memaksa layout desktop.
+   - Calendar, transfer, dan formasi tetap menjaga lebar agar tidak aneh.
+
+Build test:
+- npm run build: BERHASIL.

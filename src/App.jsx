@@ -1,17 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 
 const MY_TEAM_ID = 1;
-const BOARD_ROWS = 16;
-const BOARD_COLS = 10;
-const MAX_ACTIONS = 62;
+const BOARD_ROWS = 14;
+const BOARD_COLS = 9;
+const MAX_ACTIONS = 70;
 const MAX_AP = 3;
-const GOAL_COLS = [4, 5];
-const SHOT_STRAIGHT_RANGE = 4;
-const SHOT_SIDE_RANGE = 3;
-const SKILL_SHOT_RANGE_BONUS = 2;
+const GOAL_COLS = [4];
+const SHOT_STRAIGHT_RANGE = 3;
+const SHOT_SIDE_RANGE = 2;
+const SKILL_SHOT_RANGE_BONUS = 1;
 const INITIAL_CASH = 50000;
 const SAVE_KEY = "bola-catur-arena-career-v6";
-const SAVE_VERSION = 11;
+const SAVE_VERSION = 16;
 const SAVE_FILE_NAME = "bola-catur-arena-save.json";
 const COMPETITIONS = {
   liga48: { key: "liga48", title: "Career 4 Liga", subtitle: "Mulai dari Liga Championship, promosi ke Liga 3, Liga 2, lalu Liga 1.", badge: "Multi Season" },
@@ -21,20 +21,20 @@ const CAREER_START_DATE = new Date(2026, 7, 8); // 8 Agustus 2026, sengaja stabi
 const GAME_COMPETITIONS = [
   { key: "league", name: "Liga Utama", icon: "🏆", scope: "Domestik", weeks: "Setiap pekan", prize: 0, desc: "Kompetisi utama 48 klub, home/away." },
   { key: "domesticCup", name: "National Cup", icon: "🏅", scope: "Domestik", weeks: "8, 16, 24, 32", prize: 45000, desc: "Piala gugur domestik, rotasi skuad sangat berguna." },
-  { key: "leagueCup", name: "League Cup", icon: "🏵️", scope: "Domestik", weeks: "20, 44, 68", prize: 42000, desc: "Cup tambahan untuk rotasi pemain cadangan." },
-  { key: "superCup", name: "Super Cup", icon: "⚡", scope: "One-off", weeks: "88", prize: 90000, desc: "Laga besar akhir musim untuk klub performa terbaik." },
-  { key: "champions", name: "Champions Cup", icon: "🌟", scope: "Kontinental", weeks: "40, 48, 56, 64", prize: 110000, desc: "Top 16 sementara masuk laga bonus bergengsi." },
-  { key: "europa", name: "Europa Cup", icon: "🟠", scope: "Kontinental", weeks: "44, 52, 60", prize: 85000, desc: "Jalur kontinental kedua untuk klub yang sedang naik." },
-  { key: "conference", name: "Conference Cup", icon: "🟢", scope: "Kontinental", weeks: "28, 52, 76", prize: 62000, desc: "Kompetisi kontinental tambahan untuk klub berkembang." },
+  { key: "leagueCup", name: "League Cup", icon: "🏵️", scope: "Domestik", weeks: "20, 42, 58", prize: 42000, desc: "Cup tambahan untuk rotasi pemain cadangan." },
+  { key: "superCup", name: "Super Cup", icon: "⚡", scope: "One-off", weeks: "60", prize: 90000, desc: "Laga besar akhir musim untuk klub performa terbaik." },
+  { key: "champions", name: "Champions Cup", icon: "🌟", scope: "Kontinental", weeks: "34, 42, 50, 58", prize: 110000, desc: "Top 16 sementara masuk laga bonus bergengsi." },
+  { key: "europa", name: "Europa Cup", icon: "🟠", scope: "Kontinental", weeks: "38, 48, 60", prize: 85000, desc: "Jalur kontinental kedua untuk klub yang sedang naik." },
+  { key: "conference", name: "Conference Cup", icon: "🟢", scope: "Kontinental", weeks: "28, 46, 60", prize: 62000, desc: "Kompetisi kontinental tambahan untuk klub berkembang." },
   { key: "libertadores", name: "Libertadores Series", icon: "🔴", scope: "Amerika Selatan", weeks: "Event berita", prize: 0, desc: "Headline global, scout, dan rumor pemain teknikal." },
   { key: "sudamericana", name: "Sudamericana Series", icon: "🟡", scope: "Amerika Selatan", weeks: "Event berita", prize: 0, desc: "Sumber rumor pemain murah dengan teknik tinggi." },
-  { key: "asiaChampions", name: "Asia Champions League", icon: "🌏", scope: "Asia", weeks: "36, 60, 84", prize: 95000, desc: "Kompetisi elite Asia versi game." },
+  { key: "asiaChampions", name: "Asia Champions League", icon: "🌏", scope: "Asia", weeks: "36, 52, 60", prize: 95000, desc: "Kompetisi elite Asia versi game." },
   { key: "africaChampions", name: "Africa Champions League", icon: "🌍", scope: "Afrika", weeks: "Event berita", prize: 0, desc: "Berita global dan bursa pemain fisikal." },
   { key: "northChampions", name: "North America Champions Cup", icon: "🌎", scope: "Amerika Utara", weeks: "Event berita", prize: 0, desc: "Rumor pemain cepat dan market value naik." },
-  { key: "worldClub", name: "Club World Series", icon: "🌍", scope: "Global", weeks: "72, 80", prize: 160000, desc: "Turnamen global antar klub terbaik versi game." },
-  { key: "intercontinental", name: "Intercontinental Final", icon: "🪐", scope: "Global", weeks: "90", prize: 200000, desc: "Final global event jika season diperpanjang." },
+  { key: "worldClub", name: "Club World Series", icon: "🌍", scope: "Global", weeks: "46, 59", prize: 160000, desc: "Turnamen global antar klub terbaik versi game." },
+  { key: "intercontinental", name: "Intercontinental Final", icon: "🪐", scope: "Global", weeks: "60", prize: 200000, desc: "Final global event akhir season 60 pekan." },
   { key: "worldCup", name: "World Cup", icon: "🏳️", scope: "Internasional", weeks: "Event berita", prize: 0, desc: "Ajang internasional besar untuk berita, reputasi, dan transfer." },
-  { key: "continentalNations", name: "Continental Nations Cups", icon: "🗺️", scope: "Internasional", weeks: "10, 30, 50, 70", prize: 0, desc: "Kabar Euro/Copa/Asia/Africa/Gold Cup versi game." },
+  { key: "continentalNations", name: "Continental Nations Cups", icon: "🗺️", scope: "Internasional", weeks: "10, 30, 50", prize: 0, desc: "Kabar Euro/Copa/Asia/Africa/Gold Cup versi game." },
   { key: "nationsLeague", name: "Nations League", icon: "🏁", scope: "Internasional", weeks: "Event berita", prize: 0, desc: "Headline performa pemain nasional." },
   { key: "u20World", name: "U20 World Cup", icon: "🌱", scope: "Youth", weeks: "12, 36, 60", prize: 35000, desc: "Ajang pemain muda dan hidden potential viral." },
   { key: "u17World", name: "U17 World Cup", icon: "🧒", scope: "Youth", weeks: "Event scout", prize: 0, desc: "Munculkan rumor wonderkid sangat muda." },
@@ -58,12 +58,12 @@ const LEAGUES = [
 const LEAGUE_ORDER = ["liga1", "liga2", "liga3", "championship"];
 const LEAGUE_BY_KEY = Object.fromEntries(LEAGUES.map((l) => [l.key, l]));
 const TEAMS_PER_LEAGUE = 12;
-const SEASON_LENGTH_WEEKS = 58;
+const SEASON_LENGTH_WEEKS = 60;
 const NUMBER_ONE_WEEKS = { groups: [50, 51, 52, 53, 54], semi: 56, final: 58 };
 const TRANSFER_WINDOWS = [
   { key: "summer", name: "Awal Musim", from: 1, to: 6 },
   { key: "mid", name: "Mid Season", from: 24, to: 30 },
-  { key: "preEnd", name: "Akhir Musim", from: 55, to: 58 },
+  { key: "preEnd", name: "Akhir Musim", from: 55, to: 60 },
 ];
 function leagueInfo(key) { return LEAGUE_BY_KEY[key] || LEAGUE_BY_KEY.championship; }
 function leagueName(key) { return leagueInfo(key).name; }
@@ -111,13 +111,15 @@ function sortLeagueTeams(teams, leagueKey) {
 function groupedLeagueTables(teams) {
   return LEAGUE_ORDER.map((key) => ({ ...leagueInfo(key), teams: sortLeagueTeams(teams, key) }));
 }
-function teamWeeklyWage(team) { return (team.players || []).reduce((sum, p) => sum + Math.max(250, p.wage || 0), 0); }
+function seniorPlayers(team) { return (team?.players || []).filter((p) => !p.academy && !p.pendingArrival); }
+function academyPlayers(team) { return (team?.players || []).filter((p) => p.academy); }
+function teamWeeklyWage(team) { return seniorPlayers(team).reduce((sum, p) => sum + Math.max(250, p.wage || 0), 0); }
 function maxAiBudgetForLeague(leagueKey) {
   return ({ liga1: 1300000, liga2: 680000, liga3: 360000, championship: 190000 })[leagueKey] || 220000;
 }
 function starChaos(team) {
-  const stars90 = (team.players || []).filter((p) => p.overall >= 90).length;
-  const stars85 = (team.players || []).filter((p) => p.overall >= 85).length;
+  const stars90 = seniorPlayers(team).filter((p) => p.overall >= 90).length;
+  const stars85 = seniorPlayers(team).filter((p) => p.overall >= 85).length;
   const tooMany = stars90 >= 3 || stars85 >= 8;
   return { stars90, stars85, tooMany, penalty: tooMany ? Math.min(9, (stars90 - 1) * 2.2 + Math.max(0, stars85 - 7) * 0.6) : 0 };
 }
@@ -127,6 +129,7 @@ function cleanMarket(market, teams = []) {
   return (market || []).filter((p) => {
     if (!p || seen.has(p.id)) return false;
     seen.add(p.id);
+    if (p.userListed) return true;
     if (p.ownerTeamId && !owned.has(p.id)) return true;
     if (p.ownerTeamId && owned.has(p.id)) return false;
     return true;
@@ -259,13 +262,125 @@ function updateNumberOneState(state, teams, week, results, season) {
   next.numberOne = no1;
   return next;
 }
-function competitionFixtureForTeam(competitionState, week) { return numberOneMyFixture(competitionState, week); }
+const WORLD_EXTERNAL_CLUBS = ["Aurora Madrid", "London Royal Foxes", "Munich Adler", "Sao Paulo Eclipse", "Miami Meteors", "Riyadh Galaxy", "Johannesburg Gold", "Casablanca Lions", "Shanghai Dragons", "Melbourne Crown", "Oslo Polar", "Santiago Andes", "Istanbul Crescent", "Zurich Alpine", "Dublin Shamrocks"];
+const SPECIAL_CUP_CONFIGS = [
+  { competition: "domesticCup", cupName: "National Cup", icon: "🏅", weeks: [8, 16, 24, 32], stages: ["Round 32", "Quarter Final", "Semi Final", "Final"], minRank: 12, prize: 140000, prestige: 3, note: "Piala domestik per liga. Juara mendapat tanda NC dan fans trust." },
+  { competition: "leagueCup", cupName: "League Cup", icon: "🏵️", weeks: [20, 42, 58], stages: ["Quarter Final", "Semi Final", "Final"], minRank: 10, prize: 125000, prestige: 2, note: "Cup rotasi, cocok untuk pemain cadangan." },
+  { competition: "champions", cupName: "Champions Cup", icon: "🌟", weeks: [34, 42, 50, 58], stages: ["Group Elite", "Quarter Final", "Semi Final", "Final"], minRank: 4, prize: 450000, prestige: 6, note: "Top 4 tiap liga. Hadiah dan reputasi besar." },
+  { competition: "clubWorld", cupName: "Club World Series", icon: "🌍", weeks: [46, 59], stages: ["Semi Final", "Final"], minRank: 2, prize: 750000, prestige: 8, note: "Turnamen global klub elite." },
+  { competition: "superCup", cupName: "Super Cup", icon: "⚡", weeks: [60], stages: ["Final"], minRank: 1, prize: 650000, prestige: 7, note: "Final bergengsi untuk juara liga sementara." },
+];
+const LEAGUE_CHAMPIONSHIP_NAMES = {
+  liga1: "Elite Shield Championship",
+  liga2: "Promotion Masters Championship",
+  liga3: "Rising League Championship",
+  championship: "Founders Road Championship",
+};
+const LEAGUE_CHAMPIONSHIP_IMPACT = {
+  liga1: "Badge ESC, sponsor elite, gengsi global, dan daya tarik pemain bintang naik.",
+  liga2: "Badge PMC, promosi makin dipercaya, fan trust naik, dan sponsor regional tertarik.",
+  liga3: "Badge RLC, reputasi pembangunan naik, akademi lebih mudah viral.",
+  championship: "Badge FRC, tanda klub pendaki dari bawah, morale dan fans lokal ikut naik.",
+};
+const WORLD_CUP_CHAMPIONSHIP = { competition: "worldCupChampionship", cupName: "World Cup Championship", icon: "🏆🌍", weeks: [6, 30, 45, 60], stages: ["Group Clash", "Quarter Final", "Semi Final", "Final"], minRank: 3, prize: 1800000, prestige: 12, note: "Spesial tiap 3 season: top 3 tiap liga + 15 klub undangan dunia." };
+function worldCupSeasonActive(season) { return season === 1 || season % 3 === 1; }
+function specialCupByWeek(week, season) {
+  const cup = SPECIAL_CUP_CONFIGS.find((c) => c.weeks.includes(week));
+  if (cup) return { ...cup, stage: cup.stages[cup.weeks.indexOf(week)] || "Round" };
+  if (worldCupSeasonActive(season) && WORLD_CUP_CHAMPIONSHIP.weeks.includes(week)) return { ...WORLD_CUP_CHAMPIONSHIP, stage: WORLD_CUP_CHAMPIONSHIP.stages[WORLD_CUP_CHAMPIONSHIP.weeks.indexOf(week)] || "Round" };
+  return null;
+}
+function rankInLeague(teams, teamId) {
+  const team = teams.find((t) => t.id === teamId);
+  if (!team) return 99;
+  return sortLeagueTeams(teams, team.leagueKey).findIndex((t) => t.id === teamId) + 1 || 99;
+}
+function eligibleCupTeams(teams, cup, teamId = MY_TEAM_ID) {
+  const my = teams.find((t) => t.id === teamId);
+  if (!my) return [];
+  if (cup.competition === "worldCupChampionship") return LEAGUE_ORDER.flatMap((key) => sortLeagueTeams(teams, key).slice(0, 3));
+  return sortLeagueTeams(teams, my.leagueKey).slice(0, cup.minRank || 12);
+}
+function makeExternalTeam(seed, strength = 84) {
+  const name = WORLD_EXTERNAL_CLUBS[Math.abs(seed) % WORLD_EXTERNAL_CLUBS.length];
+  const team = { id: seed, name, city: "Undangan Dunia", color: ["#e63946", "#2a9d8f", "#5e7ce2", "#e9c46a", "#9b5de5"][Math.abs(seed) % 5], fans: 90000 + Math.abs(seed % 50000), style: pick(AI_STYLE_POOL), leagueKey: "world", leagueLevel: 0, leagueName: "World Invite", rivalId: null, players: [], preferredFormation: pick(Object.keys(FORMATIONS)), wins: 0, draws: 0, losses: 0, gf: 0, ga: 0, pts: 0, form: [], morale: 82, budget: 2500000, wagePressure: 0, growthScore: strength, aiNews: [], transferPolicy: "World", trophies: [] };
+  BASE_POSITIONS.forEach((pos, i) => team.players.push(recalcPlayerValue(genPlayer(pos, seed, Math.round((strength - 70) / 3) + rng(-1, 2)), seed)));
+  for (let i = 0; i < 14; i += 1) team.players.push(recalcPlayerValue(genPlayer(pick(EXTRA_POSITIONS), seed, Math.round((strength - 72) / 4) + rng(-3, 1)), seed));
+  team.players = team.players.map((p) => ({ ...p, teamId: seed, sourceClub: name, scouted: false })).sort((a, b) => b.overall - a.overall);
+  return team;
+}
+function teamForFixture(teams, id, season = 1, stage = "") {
+  return teams.find((t) => t.id === id) || makeExternalTeam(Number(id) || -999, stage === "Final" ? 88 + season : 82 + season);
+}
+function makeSpecialCompetitionFixture(teams, week, season, teamId = MY_TEAM_ID) {
+  const cup = specialCupByWeek(week, season);
+  if (!cup) return null;
+  const rank = rankInLeague(teams, teamId);
+  if (rank > (cup.minRank || 99)) return null;
+  const eligible = eligibleCupTeams(teams, cup, teamId).filter((t) => t.id !== teamId);
+  let opponent = null;
+  const seed = Math.abs(season * 7919 + week * 313 + teamId * 17);
+  if (cup.competition === "worldCupChampionship" && seed % 100 < 55) {
+    const extId = -10000 - season * 100 - week - (seed % WORLD_EXTERNAL_CLUBS.length);
+    opponent = { id: extId, name: WORLD_EXTERNAL_CLUBS[Math.abs(extId) % WORLD_EXTERNAL_CLUBS.length], external: true };
+  } else {
+    const pool = eligible.length ? eligible : teams.filter((t) => t.id !== teamId);
+    opponent = pool[seed % Math.max(1, pool.length)] || teams.find((t) => t.id !== teamId);
+  }
+  if (!opponent) return null;
+  const homeUser = seed % 3 !== 0;
+  const key = `${cup.competition}-${season}-${week}-${teamId}-${opponent.id}`;
+  return { key, competition: cup.competition, cupName: cup.cupName, stage: cup.stage, icon: cup.icon, leagueKey: teams.find((t) => t.id === teamId)?.leagueKey, homeId: homeUser ? teamId : opponent.id, awayId: homeUser ? opponent.id : teamId, homeName: homeUser ? null : opponent.name, awayName: homeUser ? opponent.name : null, externalOpponent: opponent.external || opponent.id < 0, prestige: cup.prestige, prize: cup.prize, note: cup.note, season };
+}
+function competitionFixtureForTeam(competitionState, week, teams = [], season = 1, teamId = MY_TEAM_ID) {
+  return numberOneMyFixture(competitionState, week) || makeSpecialCompetitionFixture(teams, week, season, teamId);
+}
+function fixtureDayOffset(fixture) {
+  const comp = fixture?.competition || "league";
+  const map = { league: 0, domesticCup: 3, leagueCup: 2, champions: 4, clubWorld: 5, superCup: 6, worldCupChampionship: 5, numberOne: 4 };
+  return map[comp] ?? 4;
+}
+function fixtureUniqueKey(fixture) {
+  if (!fixture) return "";
+  return fixture.key || `${fixture.competition || "league"}-${fixture.season || ""}-${fixture.week || ""}-${fixture.homeId}-${fixture.awayId}`;
+}
+function resultUniqueKey(result) {
+  if (!result) return "";
+  return result.matchKey || `${result.competition || "league"}-${result.season || ""}-${result.week || ""}-${result.homeId}-${result.awayId}`;
+}
+function fixtureAlreadyPlayed(log = [], fixture) {
+  const fKey = fixtureUniqueKey(fixture);
+  return (log || []).some((r) => {
+    if (!r || r.week !== fixture.week) return false;
+    if (r.matchKey && fKey && r.matchKey === fKey) return true;
+    return (r.competition || "league") === (fixture.competition || "league") && r.homeId === fixture.homeId && r.awayId === fixture.awayId;
+  });
+}
+function userFixturesForWeek(competitionState, fixtureCalendar, teams, week, season, teamId = MY_TEAM_ID) {
+  const fixtures = [];
+  const leagueFix = (fixtureCalendar?.[week - 1] || []).find((m) => m.homeId === teamId || m.awayId === teamId);
+  if (leagueFix) fixtures.push({ ...leagueFix, competition: leagueFix.competition || "league", week, season, matchDayOffset: 0 });
+  const compFix = competitionFixtureForTeam(competitionState, week, teams, season, teamId);
+  if (compFix) fixtures.push({ ...compFix, week, season, matchDayOffset: fixtureDayOffset(compFix) });
+  const seen = new Set();
+  return fixtures
+    .filter((f) => { const key = fixtureUniqueKey(f); if (seen.has(key)) return false; seen.add(key); return true; })
+    .sort((a, b) => fixtureDayOffset(a) - fixtureDayOffset(b));
+}
+function remainingUserFixturesAfter(competitionState, fixtureCalendar, teams, week, season, log = [], justPlayed = null, teamId = MY_TEAM_ID) {
+  const playedKey = resultUniqueKey(justPlayed);
+  return userFixturesForWeek(competitionState, fixtureCalendar, teams, week, season, teamId).filter((f) => {
+    if (fixtureUniqueKey(f) === playedKey) return false;
+    if (justPlayed && (f.competition || "league") === (justPlayed.competition || "league") && f.homeId === justPlayed.homeId && f.awayId === justPlayed.awayId) return false;
+    return !fixtureAlreadyPlayed(log, f);
+  });
+}
 function simulateCompetitionFixturesForWeek(state, teams, week, userResult = null) {
   const fixtures = numberOneFixturesForWeek(state, week);
   return fixtures.map((f) => {
     if (userResult && userResult.matchKey === f.key) return userResult;
-    const home = teams.find((t) => t.id === f.homeId);
-    const away = teams.find((t) => t.id === f.awayId);
+    const home = teamForFixture(teams, f.homeId, f.season, f.stage);
+    const away = teamForFixture(teams, f.awayId, f.season, f.stage);
     if (!home || !away) return null;
     return simulateOtherMatch(home, away, week, f);
   }).filter(Boolean);
@@ -279,10 +394,34 @@ function competitionPrizeForResult(result, teamId) {
     if (result.stage === "Semi Final") return won ? 220000 : 95000;
     return won ? 65000 : 25000;
   }
-  return won ? 50000 : 18000;
+  if (result.competition === "worldCupChampionship") {
+    if (result.stage === "Final") return won ? 1800000 : 650000;
+    if (result.stage === "Semi Final") return won ? 720000 : 260000;
+    return won ? 320000 : 120000;
+  }
+  if (["champions", "clubWorld", "superCup"].includes(result.competition)) {
+    if (result.stage === "Final") return won ? 750000 : 260000;
+    return won ? 280000 : 95000;
+  }
+  if (["domesticCup", "leagueCup"].includes(result.competition)) return won ? 145000 : 42000;
+  return won ? 65000 : 22000;
+}
+function competitionPrestigeImpact(result, won) {
+  if (!result?.competition || result.competition === "league") return 0;
+  if (result.competition === "worldCupChampionship") return won ? 12 : 3;
+  if (result.competition === "numberOne") return won ? 7 : 2;
+  if (["champions", "clubWorld", "superCup"].includes(result.competition)) return won ? 6 : 2;
+  return won ? 3 : 1;
+}
+function trophyMarkForResult(result) {
+  if (!result || result.stage !== "Final") return null;
+  const map = { numberOne: "NO.1", worldCupChampionship: "WCC", champions: "CH", clubWorld: "CWS", superCup: "SC", domesticCup: "NC", leagueCup: "LCUP" };
+  return map[result.competition] || "CUP";
 }
 function matchIncomeMultiplier(competition) {
+  if (competition === "worldCupChampionship") return 3.6;
   if (competition === "numberOne") return 2.3;
+  if (["champions", "clubWorld", "superCup"].includes(competition)) return 1.9;
   if (competition === "domesticCup" || competition === "leagueCup") return 1.35;
   return 1;
 }
@@ -306,52 +445,52 @@ function managerFromPreset(key) {
 
 const CLUB_DATA = [
   [1, "FC Nusantara", "Jakarta", "#e63946", 60000, "Possession"],
-  [2, "Garuda FC", "Surabaya", "#f4a261", 57000, "High Press"],
-  [3, "Elang Merah", "Bandung", "#2a9d8f", 53000, "Counter"],
-  [4, "Rajawali SC", "Medan", "#e9c46a", 50000, "Long Ball"],
-  [5, "Badak United", "Semarang", "#a8dadc", 43000, "Park Bus"],
-  [6, "Macan Selatan", "Yogyakarta", "#ffb703", 45500, "Wing Play"],
+  [2, "Tokyo Ravens", "Tokyo/Jepang", "#f4a261", 57000, "High Press"],
+  [3, "Lisbon Mariners", "Lisbon/Portugal", "#2a9d8f", 53000, "Counter"],
+  [4, "Seoul Tigers", "Seoul/Korea", "#e9c46a", 50000, "Long Ball"],
+  [5, "Cairo Pharaohs", "Cairo/Mesir", "#a8dadc", 43000, "Park Bus"],
+  [6, "Buenos Aires Azul", "Buenos Aires/Argentina", "#ffb703", 45500, "Wing Play"],
   [7, "Krakatau City", "Cilegon", "#fb8500", 39000, "Physical"],
-  [8, "Borneo Rovers", "Samarinda", "#90be6d", 42000, "Chaos"],
-  [9, "Papua Star", "Jayapura", "#c77dff", 34000, "Counter"],
+  [8, "Lagos United", "Lagos/Nigeria", "#90be6d", 42000, "Chaos"],
+  [9, "Vancouver North", "Vancouver/Kanada", "#c77dff", 34000, "Counter"],
   [10, "Celebes United", "Makassar", "#48cae4", 45500, "Possession"],
   [11, "Bali Phoenix", "Denpasar", "#ff006e", 47000, "Wing Play"],
-  [12, "Malang Tigers", "Malang", "#ffd166", 37000, "High Press"],
-  [13, "Lampung Sailors", "Lampung", "#06d6a0", 30500, "Long Ball"],
-  [14, "Riau Thunder", "Pekanbaru", "#118ab2", 32000, "Park Bus"],
+  [12, "Stockholm Wolves", "Stockholm/Swedia", "#ffd166", 37000, "High Press"],
+  [13, "Nairobi Kings", "Nairobi/Kenya", "#06d6a0", 30500, "Long Ball"],
+  [14, "Doha Falcons", "Doha/Qatar", "#118ab2", 32000, "Park Bus"],
   [15, "Solo Knights", "Solo", "#ef476f", 36500, "Physical"],
-  [16, "Madura Bulls", "Madura", "#8ecae6", 31500, "Chaos"],
+  [16, "Sydney Harbor FC", "Sydney/Australia", "#8ecae6", 31500, "Chaos"],
   [17, "Batavia Crown", "Jakarta", "#ff595e", 58000, "Tiki Taka"],
-  [18, "Sunda Royals", "Bogor", "#1982c4", 41000, "Possession"],
+  [18, "Cape Town Waves", "Cape Town/Afrika Selatan", "#1982c4", 41000, "Possession"],
   [19, "Bekasi Iron", "Bekasi", "#6a4c93", 39500, "Physical"],
-  [20, "Tangerang Meteor", "Tangerang", "#8ac926", 36000, "High Press"],
-  [21, "Aceh Rencong", "Banda Aceh", "#00b4d8", 33500, "Counter"],
+  [20, "Mexico City Meteors", "Mexico City/Meksiko", "#8ac926", 36000, "High Press"],
+  [21, "Marrakesh Atlas", "Marrakesh/Maroko", "#00b4d8", 33500, "Counter"],
   [22, "Minang Warriors", "Padang", "#ffca3a", 35000, "Wing Play"],
-  [23, "Jambi Jaguars", "Jambi", "#8338ec", 28500, "Long Ball"],
+  [23, "Prague Lions", "Prague/Ceko", "#8338ec", 28500, "Long Ball"],
   [24, "Palembang River", "Palembang", "#3a86ff", 37000, "Tiki Taka"],
-  [25, "Pontianak Hornbills", "Pontianak", "#06d6a0", 30000, "Park Bus"],
+  [25, "Osaka Blazers", "Osaka/Jepang", "#06d6a0", 30000, "Park Bus"],
   [26, "Banjar Emerald", "Banjarmasin", "#2ec4b6", 31500, "Chaos"],
-  [27, "Kupang Waves", "Kupang", "#ff9f1c", 24500, "Counter"],
+  [27, "Reykjavik Aurora", "Reykjavik/Islandia", "#ff9f1c", 24500, "Counter"],
   [28, "Ambon Spice", "Ambon", "#bc6c25", 26000, "Possession"],
-  [29, "Manado Sharks", "Manado", "#0077b6", 28000, "Wing Play"],
+  [29, "Manila Comets", "Manila/Filipina", "#0077b6", 28000, "Wing Play"],
   [30, "Ternate Volcano", "Ternate", "#d62828", 22500, "Physical"],
   [31, "Lombok Galaxy", "Mataram", "#7209b7", 30000, "High Press"],
-  [32, "Cirebon Mariners", "Cirebon", "#4cc9f0", 29000, "Long Ball"],
+  [32, "Glasgow Forge", "Glasgow/Skotlandia", "#4cc9f0", 29000, "Long Ball"],
   [33, "Pati Guardians", "Pati", "#ffafcc", 25500, "Possession"],
-  [34, "Kediri Armada", "Kediri", "#bde0fe", 33500, "Wing Play"],
-  [35, "Madiun Locos", "Madiun", "#a2d2ff", 24500, "Counter"],
+  [34, "Kigali Stars", "Kigali/Rwanda", "#bde0fe", 33500, "Wing Play"],
+  [35, "Milan Navigli", "Milan/Italia", "#a2d2ff", 24500, "Counter"],
   [36, "Ponorogo Reog", "Ponorogo", "#ffc8dd", 23500, "Physical"],
-  [37, "Purwokerto Oaks", "Purwokerto", "#cdb4db", 27500, "Park Bus"],
+  [37, "Helsinki Frost", "Helsinki/Finlandia", "#cdb4db", 27500, "Park Bus"],
   [38, "Banyuwangi Bulls", "Banyuwangi", "#90dbf4", 26500, "High Press"],
-  [39, "Karawang Steel", "Karawang", "#f7a072", 32000, "Long Ball"],
+  [39, "Karachi Royals", "Karachi/Pakistan", "#f7a072", 32000, "Long Ball"],
   [40, "Depok Wolves", "Depok", "#6dd3ce", 30000, "Chaos"],
-  [41, "Tasik Tornado", "Tasikmalaya", "#f4d35e", 28500, "Tiki Taka"],
+  [41, "Valencia Solaris", "Valencia/Spanyol", "#f4d35e", 28500, "Tiki Taka"],
   [42, "Sukabumi Atlas", "Sukabumi", "#ee964b", 27000, "Counter"],
   [43, "Palu Eagles", "Palu", "#0ead69", 24500, "Wing Play"],
   [44, "Gorontalo Moon", "Gorontalo", "#4361ee", 23000, "Possession"],
-  [45, "Bitung Harbor", "Bitung", "#ff477e", 22000, "Long Ball"],
+  [45, "Dubai Crescent", "Dubai/UEA", "#ff477e", 22000, "Long Ball"],
   [46, "Serang Spartans", "Serang", "#ffd60a", 32500, "High Press"],
-  [47, "Kudus Kretek", "Kudus", "#00bbf9", 25500, "Physical"],
+  [47, "Bogota Verde", "Bogota/Kolombia", "#00bbf9", 25500, "Physical"],
   [48, "Probolinggo Comets", "Probolinggo", "#9b5de5", 24500, "Chaos"],
 ];
 
@@ -546,8 +685,8 @@ const LAN_REAL_SQUADS = {
   ],
 };
 
-const FIRST_NAMES = ["Arya", "Bima", "Candra", "Dani", "Eko", "Fajar", "Galih", "Hendra", "Ilham", "Joko", "Kevin", "Luthfi", "Mirza", "Nanda", "Oki", "Putra", "Rafi", "Sandi", "Tama", "Udin", "Wahyu", "Yogi", "Zaki", "Andre", "Bayu", "Rendra", "Fikri", "Aditya", "Dimas", "Reza", "Hafiz", "Arkan", "Farrel", "Rizky", "Irfan", "Yudha", "Rama", "Bagas", "Gilang", "Nabil"];
-const LAST_NAMES = ["Pratama", "Santoso", "Wijaya", "Kusuma", "Ramadhan", "Hidayat", "Nugraha", "Setiawan", "Firmansyah", "Wibowo", "Susanto", "Suryadi", "Hartono", "Handoko", "Purnomo", "Gunawan", "Kurniawan", "Saputra", "Mahendra", "Perdana", "Hakim", "Nugroho", "Utama", "Prakoso", "Siregar", "Lubis", "Hasibuan", "Tanjung", "Latuconsina", "Mandagi"];
+const FIRST_NAMES = ["Arya", "Bima", "Candra", "Dani", "Eko", "Fajar", "Galih", "Hendra", "Ilham", "Joko", "Kevin", "Luthfi", "Mirza", "Nanda", "Oki", "Putra", "Rafi", "Sandi", "Tama", "Udin", "Wahyu", "Yogi", "Zaki", "Andre", "Bayu", "Rendra", "Fikri", "Aditya", "Dimas", "Reza", "Hafiz", "Arkan", "Farrel", "Rizky", "Irfan", "Yudha", "Rama", "Bagas", "Gilang", "Nabil", "Luca", "Mateo", "Noah", "Ethan", "Kai", "Leo", "Milan", "Nikolai", "Santiago", "Thiago", "Rafael", "Oscar", "Felix", "Kenji", "Hiro", "Min-Jae", "Joon", "Omar", "Youssef", "Malik", "Andre", "Diego", "Marco", "Ivan", "Arman", "Samir", "Luis", "Jonas", "Kofi", "Tariq"];
+const LAST_NAMES = ["Pratama", "Santoso", "Wijaya", "Kusuma", "Ramadhan", "Hidayat", "Nugraha", "Setiawan", "Firmansyah", "Wibowo", "Susanto", "Suryadi", "Hartono", "Handoko", "Purnomo", "Gunawan", "Kurniawan", "Saputra", "Mahendra", "Perdana", "Hakim", "Nugroho", "Utama", "Prakoso", "Siregar", "Lubis", "Hasibuan", "Tanjung", "Latuconsina", "Mandagi", "Silva", "Costa", "Rossi", "Bianchi", "Garcia", "Martinez", "Kovacic", "Novak", "Muller", "Schmidt", "Tanaka", "Sato", "Kim", "Park", "Hassan", "Diallo", "Okafor", "Mensah", "Fernandez", "Santos", "Ivanov", "Petrov", "Jensen", "Olsen", "Haddad", "Alvarez", "Rivera", "Moreau", "Dubois", "Khan"];
 const BASE_POSITIONS = ["GK", "LB", "CB", "CB", "RB", "CDM", "CM", "CM", "CAM", "LW", "ST", "RW"];
 const EXTRA_POSITIONS = ["GK", "CB", "LB", "RB", "CDM", "CM", "CAM", "LM", "RM", "LW", "RW", "ST"];
 const POS_LABELS = { GK: "Kiper", LB: "Bek Kiri", CB: "Bek Tengah", RB: "Bek Kanan", CDM: "Gelandang Bertahan", CM: "Gelandang", CAM: "Gelandang Serang", LM: "Sayap Kiri", RM: "Sayap Kanan", LW: "Winger Kiri", RW: "Winger Kanan", ST: "Striker" };
@@ -632,11 +771,25 @@ const PERSONALITIES = [
 ];
 const CUP_WEEKS = new Set([8, 16, 24, 32, 40, 48, 56, 64, 72, 80, 88]);
 const MANAGER_EVENTS = [
-  { key: "press", title: "Media mempertanyakan taktik", choices: ["Jawab tenang", "Serang balik media", "Fokus ke pemain" ] },
-  { key: "captain", title: "Kapten meminta rotasi pemain muda", choices: ["Setuju", "Tolak", "Janji minggu depan" ] },
-  { key: "sponsor", title: "Sponsor menawarkan bonus kemenangan kandang", choices: ["Ambil target", "Tolak tekanan", "Minta bonus seri" ] },
-  { key: "fans", title: "Fans menuntut permainan menyerang", choices: ["Main ofensif", "Tetap realistis", "Rotasi sayap" ] },
-  { key: "youth", title: "Pemain akademi tampil bagus di latihan", choices: ["Promosikan", "Pantau dulu", "Pinjamkan" ] },
+  { key: "press", type: "media", title: "Media mempertanyakan taktik", stakes: "Jawaban publik memengaruhi headline, fans trust, dan tekanan board.", choices: ["Jawab tenang", "Serang balik media", "Fokus ke pemain" ] },
+  { key: "captain", type: "locker", title: "Kapten meminta rotasi pemain muda", stakes: "Ruang ganti dan akademi menunggu arah manager.", choices: ["Setuju", "Tolak", "Janji minggu depan" ] },
+  { key: "sponsor", type: "sponsor", title: "Sponsor menawarkan bonus kemenangan kandang", stakes: "Target sponsor bisa menaikkan kas, tapi tekanan board ikut naik.", choices: ["Ambil target", "Tolak tekanan", "Minta bonus seri" ] },
+  { key: "fans", type: "fans", title: "Fans menuntut permainan menyerang", stakes: "Ultras ingin identitas klub lebih berani dan cepat dikenal.", choices: ["Main ofensif", "Tetap realistis", "Rotasi sayap" ] },
+  { key: "youth", type: "youth", title: "Pemain akademi tampil bagus di latihan", stakes: "Keputusan menentukan hype wonderkid dan jalur promosi.", choices: ["Promosikan", "Pantau dulu", "Pinjamkan" ] },
+  { key: "rival", type: "rivalry", title: "Media ingin membangun rivalitas baru", stakes: "Rivalitas tersimpan dan membuat derby berikutnya lebih panas.", choices: ["Terima rivalitas", "Hormati lawan", "Panas-panasi derby" ] },
+  { key: "locker", type: "locker", title: "Ruang ganti meminta bonus clean sheet", stakes: "Pemain bertahan ingin dihargai, finansial dan morale ikut terpengaruh.", choices: ["Janji bonus", "Minta bukti dulu", "Alihkan ke latihan bertahan" ] },
+  { key: "facility", type: "facility", title: "Direktur menawarkan proyek fasilitas", stakes: "Pilihan fasilitas memengaruhi growth jangka panjang.", choices: ["Prioritaskan Training Ground", "Prioritaskan Akademi", "Prioritaskan Stadion" ] },
+  { key: "transfer", type: "agent", title: "Agen menawarkan pemain viral", stakes: "Rumor bisa membuka scout, menaikkan hype, atau mengganggu ruang ganti.", choices: ["Minta laporan scout", "Tolak rumor", "Buka negosiasi" ] },
+  { key: "worldcup", type: "world", title: "Rumor World Cup Championship mulai ramai", stakes: "Ambisi global memberi reputasi besar, tapi board akan menilai target itu.", choices: ["Target juara", "Rotasi skuad", "Fokus liga dulu" ] },
+  { key: "ultimatum", type: "board", title: "Board memberi ultimatum performa", stakes: "Trust board dapat jatuh atau pulih tergantung nada bicara manager.", choices: ["Minta waktu 3 pekan", "Janji perubahan besar", "Salahkan jadwal padat" ] },
+  { key: "agentDrama", type: "agent", title: "Agen pemain inti meminta kenaikan gaji", stakes: "Abaikan terlalu lama bisa membuat pemain ingin pindah.", choices: ["Buka negosiasi kontrak", "Tahan sesuai budget", "Kirim pesan tegas" ] },
+  { key: "ultras", type: "fans", title: "Fans ultras meminta identitas klub", stakes: "Fanbase bisa makin loyal, tapi risiko rivalitas meningkat.", choices: ["Dekati komunitas fans", "Jaga jarak profesional", "Buat deklarasi derby" ] },
+  { key: "ownerProject", type: "board", title: "Owner meminta proyek 5 pekan", stakes: "Board ingin rencana jelas: akademi, promosi, finansial, atau piala. Jawaban tersimpan sebagai headline jangka panjang.", choices: ["Bangun akademi", "Kejar piala", "Sehatkan finansial" ] },
+  { key: "starUnhappy", type: "locker", title: "Pemain inti mulai gelisah", stakes: "Pemain besar ingin bukti ambisi klub. Salah jawab bisa menurunkan morale dan membuka rumor pindah.", choices: ["Janji rekrutmen", "Naikkan peran kapten", "Tegaskan disiplin" ] },
+  { key: "localDerby", type: "rivalry", title: "Kota mulai panas jelang derby", stakes: "Media lokal mencari rival baru. Pilihanmu bisa membuat laga berikutnya lebih emosional dan berita lebih besar.", choices: ["Panas-panasi rival", "Hormati tradisi", "Fokus tiga poin" ] },
+  { key: "academyParent", type: "youth", title: "Keluarga wonderkid meminta kejelasan", stakes: "Akademi butuh jalur nyata. Keputusan memengaruhi minat youth bertahan, loan, atau promosi.", choices: ["Beri jalur promosi", "Siapkan loan", "Tunggu laporan pelatih" ] },
+  { key: "mediaLeak", type: "media", title: "Bocoran ruang ganti masuk media", stakes: "Respons publik menentukan apakah krisis melebar atau berubah menjadi motivasi tim.", choices: ["Lindungi pemain", "Bantah keras", "Akui dan perbaiki" ] },
+  { key: "globalSponsor", type: "sponsor", title: "Sponsor global memantau klub", stakes: "Reputasi dan gaya bicara manager bisa membuka bonus uang, tapi target klub ikut naik.", choices: ["Ambil panggung global", "Negosiasi bonus aman", "Tolak tekanan besar" ] },
 ];
 
 const FORMATIONS = {
@@ -655,6 +808,12 @@ const FORMATIONS = {
   "4-2-4": [["GK", 3, 11], ["LB", 0, 9], ["CB", 2, 9], ["CB", 5, 9], ["RB", 7, 9], ["CM", 2, 7], ["CM", 5, 7], ["LW", 0, 4], ["ST", 2, 3], ["ST", 5, 3], ["RW", 7, 4]],
   "3-3-3-1": [["GK", 3, 11], ["CB", 1, 9], ["CB", 3, 9], ["CB", 6, 9], ["CDM", 2, 8], ["CM", 3, 7], ["CDM", 5, 8], ["LW", 1, 5], ["CAM", 3, 5], ["RW", 6, 5], ["ST", 3, 3]],
   "4-6-0": [["GK", 3, 11], ["LB", 0, 9], ["CB", 2, 9], ["CB", 5, 9], ["RB", 7, 9], ["CDM", 2, 8], ["CDM", 5, 8], ["LM", 0, 6], ["CM", 2, 6], ["CM", 5, 6], ["RM", 7, 6]],
+  "4-1-2-1-2": [["GK", 3, 11], ["LB", 0, 9], ["CB", 2, 9], ["CB", 5, 9], ["RB", 7, 9], ["CDM", 3, 8], ["CM", 2, 6], ["CM", 5, 6], ["CAM", 3, 5], ["ST", 2, 3], ["ST", 5, 3]],
+  "4-3-2-1": [["GK", 3, 11], ["LB", 0, 9], ["CB", 2, 9], ["CB", 5, 9], ["RB", 7, 9], ["CM", 1, 7], ["CDM", 3, 8], ["CM", 6, 7], ["CAM", 2, 5], ["CAM", 5, 5], ["ST", 3, 3]],
+  "3-2-4-1": [["GK", 3, 11], ["CB", 1, 9], ["CB", 3, 9], ["CB", 6, 9], ["CDM", 2, 8], ["CDM", 5, 8], ["LM", 0, 6], ["CAM", 2, 5], ["CAM", 5, 5], ["RM", 7, 6], ["ST", 3, 3]],
+  "5-4-1": [["GK", 3, 11], ["LB", 0, 9], ["CB", 1, 9], ["CB", 3, 9], ["CB", 5, 9], ["RB", 7, 9], ["LM", 0, 6], ["CM", 2, 7], ["CM", 5, 7], ["RM", 7, 6], ["ST", 3, 3]],
+  "3-4-2-1": [["GK", 3, 11], ["CB", 1, 9], ["CB", 3, 9], ["CB", 6, 9], ["LM", 0, 7], ["CM", 2, 7], ["CM", 5, 7], ["RM", 7, 7], ["CAM", 2, 5], ["CAM", 5, 5], ["ST", 3, 3]],
+  "4-2-1-3": [["GK", 3, 11], ["LB", 0, 9], ["CB", 2, 9], ["CB", 5, 9], ["RB", 7, 9], ["CDM", 2, 8], ["CDM", 5, 8], ["CAM", 3, 6], ["LW", 1, 4], ["ST", 3, 3], ["RW", 6, 4]],
 };
 
 const COMPATIBLE = {
@@ -706,6 +865,9 @@ const STYLE_PROFILES = {
   "Wing Play": { pass: 3, shortPass: 0, through: 4, shot: 1, press: 1, support: 10, offBall: 18, width: 16, risk: 2, tempo: "wide overload" },
   Physical: { pass: -5, shortPass: -2, through: 0, shot: 2, press: 8, support: 6, offBall: 10, width: 0, risk: 5, tackle: 10, tempo: "duel" },
   Chaos: { pass: -8, shortPass: -4, through: 7, shot: 7, press: 3, support: 4, offBall: 14, width: 5, risk: 14, tempo: "unpredictable" },
+  Gegenpress: { pass: -1, shortPass: 1, through: 6, shot: 5, press: 14, support: 9, offBall: 18, width: 1, risk: 8, tackle: 8, tempo: "gegenpress" },
+  "Vertical Tiki Taka": { pass: 10, shortPass: 9, through: 9, shot: 1, press: 5, support: 18, offBall: 24, width: 0, risk: 2, tempo: "vertical triangles" },
+  Catenaccio: { pass: -2, shortPass: 5, through: -3, shot: -1, press: -2, support: 4, offBall: 12, width: -3, risk: -14, block: 18, tempo: "deep defensive" },
 };
 const AI_STYLE_POOL = Object.keys(STYLE_PROFILES);
 const AI_DEVELOPMENT_ARCHETYPES = {
@@ -718,6 +880,9 @@ const AI_DEVELOPMENT_ARCHETYPES = {
   "Wing Play": { focus: "pace", youth: 7, transfer: "winger eksplosif", desc: "menambah lebar serangan" },
   Physical: { focus: "defend", youth: 5, transfer: "duelist fisik", desc: "menang duel dan second ball" },
   Chaos: { focus: "dribble", youth: 8, transfer: "talenta liar", desc: "memburu pemain unpredictable" },
+  Gegenpress: { focus: "stamina", youth: 7, transfer: "pressing forward", desc: "mencari pemain dengan work rate tinggi" },
+  "Vertical Tiki Taka": { focus: "pass", youth: 8, transfer: "playmaker progresif", desc: "mencari kombinasi cepat vertikal" },
+  Catenaccio: { focus: "defend", youth: 5, transfer: "bek taktis", desc: "membangun blok bertahan elite" },
 };
 const AI_DIFFICULTIES = {
   Easy: { label: "Easy", desc: "AI lebih banyak salah posisi dan jarang killer pass.", noise: 42, bestPick: 44, aiBonus: -8, offBall: -8 },
@@ -859,12 +1024,12 @@ function competitionEventsForWeek(week, teams = []) {
   const events = [{ key: `league-${week}`, type: "league", icon: "🏆", competition: "Liga Utama", date: formatDateId(dateForWeek(week)), note: "Matchday liga" }];
   if ([8, 16, 24, 32].includes(week)) events.push({ key: `cup-${week}`, type: "domesticCup", icon: "🏅", competition: "National Cup", date: formatDateId(dateForWeek(week, 3)), note: "Babak gugur domestik" });
   if ([12, 36, 60].includes(week)) events.push({ key: `youth-${week}`, type: "u20World", icon: "🌱", competition: "U20 World Cup", date: formatDateId(dateForWeek(week, 4)), note: "Scout pemain muda & hidden potential" });
-  if ([20, 44, 68].includes(week)) events.push({ key: `leaguecup-${week}`, type: "leagueCup", icon: "🏵️", competition: "League Cup", date: formatDateId(dateForWeek(week, 2)), note: "Rotasi pemain cadangan bisa menentukan hasil" });
-  if ([36, 60, 84].includes(week)) events.push({ key: `asia-${week}`, type: "asiaChampions", icon: "🌏", competition: "Asia Champions League", date: formatDateId(dateForWeek(week, 5)), note: "Laga elite Asia versi game" });
-  if ([40, 48, 56, 64].includes(week)) events.push({ key: `champ-${week}`, type: "champions", icon: "🌟", competition: "Champions Cup", date: formatDateId(dateForWeek(week, 3)), note: "Top 16 sementara mendapat laga bonus" });
-  if ([72, 80].includes(week)) events.push({ key: `world-${week}`, type: "worldClub", icon: "🌍", competition: "Club World Series", date: formatDateId(dateForWeek(week, 4)), note: "Turnamen global versi game" });
-  if (week === 88) events.push({ key: `super-${week}`, type: "superCup", icon: "⚡", competition: "Super Cup", date: formatDateId(dateForWeek(week, 5)), note: "Final event akhir musim" });
-  if ([10, 30, 50, 70].includes(week)) events.push({ key: `nation-${week}`, type: "continentalNations", icon: "🗺️", competition: "Continental Nations Cups", date: formatDateId(dateForWeek(week, 2)), note: "Berita internasional & rumor transfer" });
+  if ([20, 42, 58].includes(week)) events.push({ key: `leaguecup-${week}`, type: "leagueCup", icon: "🏵️", competition: "League Cup", date: formatDateId(dateForWeek(week, 2)), note: "Rotasi pemain cadangan bisa menentukan hasil" });
+  if ([36, 52, 60].includes(week)) events.push({ key: `asia-${week}`, type: "asiaChampions", icon: "🌏", competition: "Asia Champions League", date: formatDateId(dateForWeek(week, 5)), note: "Laga elite Asia versi game" });
+  if ([34, 42, 50, 58].includes(week)) events.push({ key: `champ-${week}`, type: "champions", icon: "🌟", competition: "Champions Cup", date: formatDateId(dateForWeek(week, 3)), note: "Top 16 sementara mendapat laga bonus" });
+  if ([46, 59].includes(week)) events.push({ key: `world-${week}`, type: "worldClub", icon: "🌍", competition: "Club World Series", date: formatDateId(dateForWeek(week, 4)), note: "Turnamen global versi game" });
+  if (week === 60) events.push({ key: `super-${week}`, type: "superCup", icon: "⚡", competition: "Super Cup", date: formatDateId(dateForWeek(week, 5)), note: "Final event akhir musim" });
+  if ([10, 30, 50].includes(week)) events.push({ key: `nation-${week}`, type: "continentalNations", icon: "🗺️", competition: "Continental Nations Cups", date: formatDateId(dateForWeek(week, 2)), note: "Berita internasional & rumor transfer" });
   if (week % 10 === 0) events.push({ key: `worldcup-${week}`, type: "worldCup", icon: "🏳️", competition: "World Cup Watch", date: formatDateId(dateForWeek(week, 1)), note: "Headline global memengaruhi rumor dan market value" });
   return events;
 }
@@ -885,7 +1050,8 @@ function applyUserClubChoice(teams, selectedClubId) {
     ...Array(12).fill("liga1"), ...Array(12).fill("liga2"), ...Array(12).fill("liga3"), ...Array(11).fill("championship"),
   ];
   const arrangedOthers = others.slice().sort((a, b) => leagueInfo(a.leagueKey).level - leagueInfo(b.leagueKey).level || teamPower(b) - teamPower(a)).map((team, idx) => rebalanceTeamForLeague(team, slots[idx] || "championship"));
-  return [rebalanceTeamForLeague(userTeam, "championship"), ...arrangedOthers].map((t) => ({ ...t, players: (t.players || []).map((p) => ({ ...p, teamId: t.id })) }));
+  const arranged = [rebalanceTeamForLeague(userTeam, "championship"), ...arrangedOthers].map((t) => ({ ...t, players: (t.players || []).map((p) => ({ ...p, teamId: t.id })) }));
+  return ensureUserAcademyInTeams(arranged, 1, 1, 6);
 }
 function viralCandidate(teams) {
   return teams.flatMap((t) => (t.players || []).map((p) => ({ ...p, clubName: t.name, clubColor: t.color })))
@@ -902,8 +1068,24 @@ function newsItems({ teams, week, market, cash, storyLog, log, myTeam, worldNews
   if (affordable) items.push({ tag: "Transfer Watch", icon: "🔎", title: `${affordable.name} masuk radar klub kecil`, body: `${affordable.pos} OVR ${affordable.overall}, harga ${money(affordable.value)}. Budget awal tetap ketat, jadi loan/scout penting.` });
   competitionEventsForWeek(week, teams).slice(1).forEach((e) => items.push({ tag: e.competition, icon: e.icon, title: `${e.competition} hadir pekan ${week}`, body: e.note }));
   if (storyLog?.some((e) => !e.choice)) items.push({ tag: "Club Story", icon: "💬", title: "Ada isu ruang ganti belum dijawab", body: "Pilihan manager bisa menaikkan board trust, fan trust, atau arah perkembangan skuad." });
-  if (myTeam) items.push({ tag: "Club Pulse", icon: "📊", title: `${myTeam.name}: rata-rata skuad inti ${fairClubAverage(myTeam)}`, body: "Semua klub dimulai fair sekitar 70. Klub menjadi kuat karena training, transfer, youth, dan hasil pekan." });
-  return items.slice(0, 10);
+  const offers = (myTeam?.players || []).filter((p) => p.pendingOffer).length;
+  const injuries = (myTeam?.players || []).filter((p) => (p.injuredWeeks || 0) > 0).sort((a, b) => b.injuredWeeks - a.injuredWeeks)[0];
+  const academyGem = (myTeam?.players || []).filter((p) => p.academy || p.age <= 21).sort((a, b) => (b.potential - b.overall) - (a.potential - a.overall))[0];
+  if (offers) items.push({ tag: "Transfer Inbox", icon: "📩", title: `${offers} offer menunggu keputusan`, body: "Buka menu Skuad untuk menerima, menolak, atau ajukan ulang. Keputusan transfer memengaruhi kas dan kedalaman skuad." });
+  if (injuries) items.push({ tag: "Medical Report", icon: "🏥", title: `${injuries.name} masih cedera`, body: `${injuries.pos} absen ${injuries.injuredWeeks} pekan. Medical Center mengurangi risiko cedera fatal dan durasi absen.` });
+  if (academyGem) items.push({ tag: "Youth Report", icon: "🌱", title: `${firstName(academyGem.name)} dipantau pelatih akademi`, body: `${academyGem.pos} usia ${academyGem.age}, OVR ${academyGem.overall}, ${academyGem.scouted ? `POT ${academyGem.potential}` : "potensi belum dicek"}. EXP youth naik setiap pekan.` });
+  const unhappy = seniorPlayers(myTeam || {}).filter((p) => (p.morale || 70) < 50).sort((a, b) => (a.morale || 0) - (b.morale || 0))[0];
+  const contractRisk = seniorPlayers(myTeam || {}).filter((p) => (p.contract || 0) <= 1).sort((a, b) => b.overall - a.overall)[0];
+  const listed = seniorPlayers(myTeam || {}).filter((p) => p.listedForSale || p.listedForLoan).length;
+  const trophy = (myTeam?.trophies || [])[0];
+  const rival = teams.find((t) => t.id === myTeam?.rivalId);
+  if (unhappy) items.push({ tag: "Locker Room", icon: "😡", title: `${firstName(unhappy.name)} kurang puas`, body: `${unhappy.pos} OVR ${unhappy.overall} morale ${unhappy.morale}. Story, kontrak, rotasi, atau kemenangan bisa mengubah suasana ruang ganti.` });
+  if (contractRisk) items.push({ tag: "Contract Watch", icon: "🧾", title: `Kontrak ${firstName(contractRisk.name)} perlu perhatian`, body: `${contractRisk.pos} OVR ${contractRisk.overall} kontrak ${contractRisk.contract || 0} tahun. Jika diabaikan, pemain bisa masuk free agent di akhir proses season.` });
+  if (listed) items.push({ tag: "Market Signal", icon: "📡", title: `${listed} pemain klub masuk radar market`, body: "Pemain yang ditandai jual/loan muncul di menu Transfer dan bisa mendapat offer AI setelah pekan berjalan." });
+  if (trophy) items.push({ tag: "Trophy Legacy", icon: "🏆", title: `${myTeam.name} membawa tanda ${trophy.mark || trophy.name}`, body: `Gelar ${trophy.name} season ${trophy.season} meningkatkan gengsi, sponsor, fanbase, dan daya tarik klub di mata pemain.` });
+  if (rival) items.push({ tag: "Rivalry Heat", icon: "🔥", title: `Rivalitas dengan ${rival.name} mulai terasa`, body: "Derby memengaruhi kartu, emosi, headline, fan trust, dan atmosfer kompetisi. Story bisa membuat panasnya bertahan lebih lama." });
+  if (myTeam) items.push({ tag: "Club Pulse", icon: "📊", title: `${myTeam.name}: rata-rata skuad inti ${fairClubAverage(myTeam)}`, body: "Semua klub dimulai fair sekitar 70. Klub menjadi kuat karena training, transfer, youth, fasilitas, piala, dan keputusan story." });
+  return items.slice(0, 24);
 }
 
 function clubPrestige(teamId) {
@@ -915,50 +1097,112 @@ function positionValueMultiplier(pos) {
   return ({ GK: 0.92, CB: 0.96, LB: 0.97, RB: 0.97, CDM: 1.02, CM: 1.06, CAM: 1.14, LM: 1.04, RM: 1.04, LW: 1.16, RW: 1.16, ST: 1.22 })[pos] || 1;
 }
 function calcMarketValue({ overall, potential, age, pos, pace, shoot, pass, dribble, defend, stamina }, teamId, academy = false) {
-  const bucket = overall >= 80 ? rng(430000, 1450000) : overall >= 70 ? rng(120000, 360000) : overall >= 60 ? rng(45000, 115000) : rng(12000, 42000);
+  // Harga dibuat jauh lebih realistis: 80-85 sudah jutaan, 85+ puluhan juta,
+  // 90+ sangat mahal. Youth academy tetap murah saat belum dipromosikan.
+  const base = overall >= 95 ? rng(80000000, 180000000)
+    : overall >= 90 ? rng(35000000, 110000000)
+    : overall >= 85 ? rng(12000000, 55000000)
+    : overall >= 80 ? rng(2000000, 12000000)
+    : overall >= 70 ? rng(250000, 1800000)
+    : overall >= 60 ? rng(45000, 180000)
+    : rng(12000, 42000);
   const roleSkill = pos === "GK" ? (defend * 0.55 + pass * 0.18 + stamina * 0.27)
     : ["CB", "LB", "RB", "CDM"].includes(pos) ? (defend * 0.45 + pace * 0.18 + pass * 0.18 + stamina * 0.19)
     : ["CM", "CAM", "LM", "RM"].includes(pos) ? (pass * 0.38 + dribble * 0.25 + stamina * 0.18 + shoot * 0.19)
     : (shoot * 0.38 + pace * 0.24 + dribble * 0.25 + pass * 0.13);
-  const potentialPremium = clamp(1 + Math.max(0, potential - overall) * (age <= 21 ? 0.035 : 0.018), 1, 2.45);
-  const ageMult = age <= 21 ? 1.18 : age <= 25 ? 1.08 : age <= 30 ? 1 : 0.82;
-  const skillMult = clamp(0.72 + roleSkill / 100, 0.95, 1.62);
+  const potentialPremium = clamp(1 + Math.max(0, potential - overall) * (age <= 21 ? 0.055 : 0.025), 1, overall >= 85 ? 3.1 : 2.35);
+  const ageMult = age <= 19 ? 1.25 : age <= 22 ? 1.18 : age <= 26 ? 1.1 : age <= 30 ? 1 : age <= 33 ? 0.78 : 0.58;
+  const skillMult = clamp(0.72 + roleSkill / 100, 0.9, 1.68);
+  const rarityMult = overall >= 95 ? 1.55 : overall >= 90 ? 1.22 : 1;
   const randomTaste = rng(86, 122) / 100;
-  const value = bucket * positionValueMultiplier(pos) * clubPrestige(teamId) * potentialPremium * ageMult * skillMult * randomTaste * (academy ? 0.82 : 1);
-  return Math.round(value / 500) * 500;
+  const raw = base * positionValueMultiplier(pos) * clubPrestige(teamId) * potentialPremium * ageMult * skillMult * rarityMult * randomTaste * (academy ? 0.45 : 1);
+  return Math.max(500, Math.round(raw / 500) * 500);
 }
 function genPlayer(pos, teamId, tier = 0, academy = false) {
   const attack = ["ST", "LW", "RW", "CAM", "LM", "RM"].includes(pos) ? 8 : 0;
   const defendBonus = ["GK", "CB", "LB", "RB", "CDM"].includes(pos) ? 9 : 0;
   const passBonus = ["CM", "CDM", "CAM", "LM", "RM"].includes(pos) ? 8 : 0;
-  const overall = clamp(rng(64, 74) + tier + rng(-2, 2), 55, 82);
+  const ultraRare = Math.random() < 0.001; // rating 98/potential 98 benar-benar 1 banding 1000.
+  const rarePotential = ultraRare || Math.random() < 0.025;
+  const overallBase = clamp(rng(64, 74) + tier + rng(-2, 2) + (ultraRare ? rng(5, 10) : 0), 55, ultraRare ? 94 : 88);
+  const overall = Math.min(98, overallBase);
   const age = academy ? rng(16, 21) : rng(17, 35);
-  const rarePotential = Math.random() < 0.025;
-  const potentialCap = rarePotential ? (overall >= 84 ? 94 : 90) : (overall >= 84 ? 89 : 85);
+  const potentialCap = ultraRare ? 98 : rarePotential ? (overall >= 84 ? 96 : 92) : (overall >= 84 ? 90 : 86);
   const potential = clamp(overall + (rarePotential ? rng(8, 18) + (age <= 21 ? 4 : 0) : rng(1, 7) + (age <= 21 ? rng(0, 4) : 0)), overall, potentialCap);
   const trait = traitForPosition(pos);
   const personality = rarePotential ? "Wonderkid Mindset" : pick(PERSONALITIES.filter((p) => p.key !== "Wonderkid Mindset")).key;
-  const pace = clamp(rng(44, 82) + attack + (pos === "GK" ? -12 : 0), 25, 99);
-  const shoot = clamp(rng(35, 73) + attack - (pos === "GK" ? 25 : 0), 10, 99);
-  const pass = clamp(rng(38, 77) + passBonus, 20, 99);
-  const dribble = clamp(rng(38, 79) + attack, 20, 99);
-  const defend = clamp(rng(32, 78) + defendBonus - (pos === "ST" ? 12 : 0), 15, 99);
-  const stamina = clamp(rng(50, 89), 25, 99);
+  const pace = clamp(rng(44, 82) + attack + (pos === "GK" ? -12 : 0) + (ultraRare ? 4 : 0), 25, 99);
+  const shoot = clamp(rng(35, 73) + attack - (pos === "GK" ? 25 : 0) + (ultraRare ? 4 : 0), 10, 99);
+  const pass = clamp(rng(38, 77) + passBonus + (ultraRare ? 4 : 0), 20, 99);
+  const dribble = clamp(rng(38, 79) + attack + (ultraRare ? 4 : 0), 20, 99);
+  const defend = clamp(rng(32, 78) + defendBonus - (pos === "ST" ? 12 : 0) + (ultraRare ? 4 : 0), 15, 99);
+  const stamina = clamp(rng(50, 89) + (ultraRare ? 4 : 0), 25, 99);
   const value = calcMarketValue({ overall, potential, age, pos, pace, shoot, pass, dribble, defend, stamina }, teamId, academy);
   return {
-    id: playerId++, teamId, name: genName(), pos, age, overall, potential, rarePotential, personality, scouted: false, scoutStatus: "unknown", loan: false,
-    trait, roleSkills: roleSkillsFor(pos), morale: rng(58, 84), fitness: 100, injuredWeeks: 0, bannedWeeks: 0, yellowCards: 0,
+    id: playerId++, teamId, name: genName(), pos, age, overall, potential, rarePotential, ultraRare, personality, scouted: false, scoutStatus: "unknown", loan: false,
+    trait, roleSkills: roleSkillsFor(pos), morale: rng(58, 84), fitness: 100, injuredWeeks: 0, bannedWeeks: 0, yellowCards: 0, xp: rng(0, 30), level: Math.max(1, Math.floor((overall - 55) / 5)), listedForSale: false, listedForLoan: false,
     pace, shoot, pass, dribble, defend, stamina, value,
-    wage: Math.round(clamp(value * rng(45, 95) / 10000, 500, 45000) / 100) * 100,
+    wage: Math.round(clamp(value * rng(35, 85) / 10000, 500, overall >= 85 ? 260000 : 65000) / 100) * 100,
     contract: rng(1, 5),
   };
 }
+function makeAcademyIntake(team, season = 1, academyLevel = 1, count = 6) {
+  const positions = ["GK", "CB", "LB", "CM", "CAM", "RW", "ST", "CDM", "RB", "LW"];
+  const levelBoost = Math.max(0, (academyLevel || 1) - 1);
+  return Array.from({ length: count }, (_, i) => {
+    const pos = positions[i % positions.length];
+    const kid = genPlayer(pos, team.id, rng(-12 + levelBoost, -4 + levelBoost), true);
+    const next = {
+      ...kid,
+      academy: true,
+      sourceClub: `${team.name} Academy`,
+      contract: 0,
+      wage: 0,
+      scouted: false,
+      xp: rng(0, 25),
+      level: Math.max(1, Math.floor((kid.overall - 55) / 5)),
+      pendingSquadAction: null,
+      listedForSale: false,
+      listedForLoan: false,
+      freeAgent: false,
+      loan: false,
+    };
+    return recalcPlayerValue(next, team.id);
+  });
+}
+function ensureAcademyForTeam(team, season = 1, academyLevel = 1, minAcademy = 6) {
+  const existing = academyPlayers(team);
+  if (existing.length >= minAcademy) return team;
+  const additions = makeAcademyIntake(team, season, academyLevel, minAcademy - existing.length);
+  return { ...team, players: [...(team.players || []), ...additions].sort((a, b) => Number(a.academy) - Number(b.academy) || b.overall - a.overall) };
+}
+function ensureUserAcademyInTeams(teams, season = 1, academyLevel = 1, minAcademy = 6) {
+  return (teams || []).map((t) => t.id === MY_TEAM_ID ? ensureAcademyForTeam(t, season, academyLevel, minAcademy) : t);
+}
+
 function lineForFormation(formation) {
-  return (FORMATIONS[formation] || FORMATIONS["4-3-3"]).map(([pos, x, y]) => ({
-    pos,
-    x: Math.round((x / 7) * (BOARD_COLS - 1)),
-    y: Math.round((y / 11) * (BOARD_ROWS - 1)),
-  }));
+  // Kick-off dibuat seperti sepakbola asli: semua starting XI berada di area sendiri,
+  // tidak ada striker/winger yang melewati garis tengah saat match baru dimulai.
+  // Board v7 lebih compact (9x14), jadi posisi ditata by-role supaya formasi tidak ngaco/menumpuk.
+  const raw = FORMATIONS[formation] || FORMATIONS["4-3-3"];
+  const ownHalfStart = Math.ceil((BOARD_ROWS - 1) / 2);
+  const yByRole = {
+    GK: BOARD_ROWS - 2,
+    LB: BOARD_ROWS - 3, CB: BOARD_ROWS - 3, RB: BOARD_ROWS - 3,
+    CDM: BOARD_ROWS - 4,
+    CM: BOARD_ROWS - 5, LM: BOARD_ROWS - 5, RM: BOARD_ROWS - 5,
+    CAM: BOARD_ROWS - 6, LW: BOARD_ROWS - 6, RW: BOARD_ROWS - 6, ST: BOARD_ROWS - 6,
+  };
+  return raw.map(([pos, x, y], idx) => {
+    const baseX = pos === "GK" ? Math.round(centerX()) : Math.round((x / 7) * (BOARD_COLS - 1));
+    const fallbackY = Math.round(ownHalfStart + 1 + clamp((y - 3) / 8, 0, 1) * (BOARD_ROWS - ownHalfStart - 3));
+    return {
+      pos,
+      x: clamp(baseX, 0, BOARD_COLS - 1),
+      y: clamp(yByRole[pos] ?? fallbackY, ownHalfStart + 1, BOARD_ROWS - 2),
+      slotIndex: idx,
+    };
+  });
 }
 function mirror(slot) { return { ...slot, y: BOARD_ROWS - 1 - slot.y }; }
 function buildClubs() {
@@ -979,7 +1223,7 @@ function buildClubs() {
     const rebalanced = rebalanceTeamForLeague(team, leagueKey);
     Object.assign(team, rebalanced, { budget: INITIAL_CASH });
   });
-  return clubs;
+  return ensureUserAcademyInTeams(clubs, 1, 1, 6);
 }
 function buildFixtures(teamIds) {
   const ids = [...teamIds];
@@ -1058,7 +1302,7 @@ const INITIAL_TEAMS = buildClubs();
 const SEASON_FIXTURES = buildLeagueFixtures(INITIAL_TEAMS, 1);
 
 function teamPower(team) {
-  const core = (team.players || []).filter((p) => p.injuredWeeks <= 0 && p.bannedWeeks <= 0).slice().sort((a, b) => b.overall - a.overall).slice(0, 11);
+  const core = seniorPlayers(team).filter((p) => p.injuredWeeks <= 0 && p.bannedWeeks <= 0).slice().sort((a, b) => b.overall - a.overall).slice(0, 11);
   const base = core.reduce((sum, p) => sum + p.overall, 0) / 11 || 55;
   const chaos = starChaos(team);
   const moraleMod = ((team.morale || 70) - 70) / 18;
@@ -1069,12 +1313,12 @@ function pickLineup(team, formationName, overrides = {}) {
   const used = new Set();
   return slots.map((slot, idx) => {
     const forcedId = Number(overrides[idx]);
-    const forced = forcedId ? team.players.find((p) => p.id === forcedId && !used.has(p.id) && p.injuredWeeks <= 0 && p.bannedWeeks <= 0) : null;
+    const forced = forcedId ? team.players.find((p) => p.id === forcedId && !p.academy && !p.pendingArrival && !used.has(p.id) && p.injuredWeeks <= 0 && p.bannedWeeks <= 0) : null;
     if (forced) { used.add(forced.id); return { player: forced, slot, manual: true }; }
     const compat = COMPATIBLE[slot.pos] || [slot.pos];
-    let candidates = team.players.filter((p) => !used.has(p.id) && p.injuredWeeks <= 0 && p.bannedWeeks <= 0 && compat.includes(p.pos));
-    if (!candidates.length) candidates = team.players.filter((p) => !used.has(p.id) && p.injuredWeeks <= 0 && p.bannedWeeks <= 0);
-    if (!candidates.length) candidates = team.players.filter((p) => !used.has(p.id));
+    let candidates = team.players.filter((p) => !p.academy && !p.pendingArrival && !used.has(p.id) && p.injuredWeeks <= 0 && p.bannedWeeks <= 0 && compat.includes(p.pos));
+    if (!candidates.length) candidates = team.players.filter((p) => !p.academy && !p.pendingArrival && !used.has(p.id) && p.injuredWeeks <= 0 && p.bannedWeeks <= 0);
+    if (!candidates.length) candidates = team.players.filter((p) => !p.academy && !p.pendingArrival && !used.has(p.id));
     const chosen = candidates.slice().sort((a, b) => {
       const exactA = a.pos === slot.pos ? 12 : 0;
       const exactB = b.pos === slot.pos ? 12 : 0;
@@ -1090,10 +1334,9 @@ function benchFor(team, formationName, overrides = {}) {
   const lineup = pickLineup(team, formationName, overrides);
   const used = new Set(lineup.map(({ player }) => player.id));
   return team.players
-    .filter((p) => !used.has(p.id) && p.injuredWeeks <= 0 && p.bannedWeeks <= 0)
+    .filter((p) => !p.academy && !p.pendingArrival && !used.has(p.id) && p.injuredWeeks <= 0 && p.bannedWeeks <= 0)
     .slice()
-    .sort((a, b) => b.overall - a.overall)
-    .slice(0, 9);
+    .sort((a, b) => b.overall - a.overall);
 }
 function piecesFor(team, side, formationName, facilities, overrides = {}) {
   return pickLineup(team, formationName, overrides).map(({ player, slot }, idx) => {
@@ -1109,7 +1352,14 @@ function piecesFor(team, side, formationName, facilities, overrides = {}) {
   });
 }
 function kickoffPlayer(pieces, side) {
-  return pieces.filter((p) => p.side === side && !p.red).sort((a, b) => goalDistance(a) - goalDistance(b) || b.overall - a.overall)[0]?.id;
+  // Kick-off awal dan restart setelah gol selalu diberikan ke pemain menyerang,
+  // tetapi posisi semua pemain tetap berada di area sendiri sebelum garis tengah.
+  const attackers = ["ST", "CAM", "LW", "RW", "LM", "RM", "CM"];
+  const alive = pieces.filter((p) => p.side === side && !p.red && !p.vacant && !pieceTemporarilyOut(null, p));
+  const preferred = alive.filter((p) => attackers.includes(p.role));
+  const pool = preferred.length ? preferred : alive;
+  const roleRank = (role) => ({ ST: 80, CAM: 62, LW: 56, RW: 56, LM: 42, RM: 42, CM: 28, CDM: 18, LB: 12, RB: 12, CB: 6, GK: 0 })[role] || 0;
+  return pool.slice().sort((a, b) => roleRank(b.role) - roleRank(a.role) || goalDistance(a) - goalDistance(b) || b.overall - a.overall)[0]?.id || alive[0]?.id;
 }
 function drawCards(count = 3) {
   const pool = [...TACTIC_CARDS].sort(() => Math.random() - 0.5);
@@ -1315,10 +1565,30 @@ function cupBonusForWeek(week, team, result) {
   const won = (result.homeId === team.id && result.homeGoals > result.awayGoals) || (result.awayId === team.id && result.awayGoals > result.homeGoals);
   return won ? 110000 : 25000;
 }
-function randomStoryEvent(week) { const e = pick(MANAGER_EVENTS); return { id: `${week}-${Date.now()}-${Math.random().toString(36).slice(2)}`, week, title: e.title, choices: e.choices, choice: null, effect: null }; }
+function randomStoryEvent(week, teams = [], myTeam = null, manager = {}) {
+  const e = pick(MANAGER_EVENTS);
+  const rivals = (teams || []).filter((t) => t.id !== MY_TEAM_ID && t.leagueKey === myTeam?.leagueKey).slice().sort((a, b) => teamPower(b) - teamPower(a));
+  const rival = rivals[(week + (myTeam?.id || 1)) % Math.max(1, rivals.length)] || (teams || []).find((t) => t.id !== MY_TEAM_ID);
+  const arc = e.type === "rivalry" && rival ? `Calon rival: ${rival.name}. Derby akan menaikkan emosi, kartu, berita, fan trust, dan gengsi.`
+    : e.type === "sponsor" ? "Sponsor dapat memberi uang cepat, tetapi target membuat board lebih menuntut."
+    : e.type === "youth" ? "Keputusan bisa mempercepat breakthrough akademi atau membuka offer loan untuk youth."
+    : e.type === "board" ? "Board akan mengingat nada jawaban ini sampai beberapa pekan berikutnya."
+    : e.stakes;
+  return { id: `${week}-${Date.now()}-${Math.random().toString(36).slice(2)}`, week, key: e.key, type: e.type, title: e.title, stakes: e.stakes, arc, relatedClubId: rival?.id || null, relatedClubName: rival?.name || null, choices: e.choices, choice: null, effect: null };
+}
 
 function trainingBonus(game, key) { return TRAINING_PLANS[game.trainingPlan]?.[key] || 0; }
 function isWide(x) { return x === 0 || x === 1 || x === BOARD_COLS - 2 || x === BOARD_COLS - 1; }
+function aiCornerPenalty(cell, side, style = "") {
+  const edge = Math.min(cell.x, BOARD_COLS - 1 - cell.x);
+  const nearGoalLine = goalDistance({ ...cell, side }) <= 2 || ownGoalDistance(side, cell) <= 2;
+  // AI lama terlalu sering membawa bola ke pojok. Penalti dibuat jauh lebih tegas,
+  // tetapi Wing Play masih boleh memakai sisi lapangan selama bukan terjebak di sudut.
+  const sidelinePenalty = edge === 0 ? 54 : edge === 1 ? 22 : 0;
+  const cornerTrap = nearGoalLine && edge <= 1 ? 72 : nearGoalLine && edge <= 2 ? 24 : 0;
+  const wingDiscount = style === "Wing Play" ? 0.62 : style === "Long Ball" || style === "Counter" ? 0.78 : 1;
+  return Math.round((sidelinePenalty + cornerTrap) * wingDiscount);
+}
 function pressureAt(game, side, x, y) {
   const highPress = effect(game, otherSide(side), "press") ? 1 : 0;
   const stylePress = tacticMod(game, otherSide(side), "press") / 12;
@@ -1383,7 +1653,7 @@ function traitBonus(piece, area) {
 }
 function legalRunCells(game, pieceId) {
   const piece = getPiece(game, pieceId);
-  if (!piece || game.ended || piece.red || piece.side !== game.turn || game.ap < 1) return [];
+  if (!piece || game.ended || piece.red || piece.vacant || pieceTemporarilyOut(game, piece) || piece.side !== game.turn || game.ap < 1) return [];
   const hasBall = game.ballOwnerId === piece.id;
   const isKeeper = piece.role === "GK";
   let range = isKeeper ? 4 : (hasBall ? 2 : 3);
@@ -1414,8 +1684,8 @@ function legalRunCells(game, pieceId) {
 }
 function passOptions(game, pieceId, through = false) {
   const piece = getPiece(game, pieceId);
-  if (!piece || game.ended || piece.red || piece.side !== game.turn || game.ballOwnerId !== piece.id || game.ap < (through ? 2 : 1)) return [];
-  return game.pieces.filter((p) => !p.red && p.side === piece.side && p.id !== piece.id).map((target) => {
+  if (!piece || game.ended || piece.red || piece.vacant || pieceTemporarilyOut(game, piece) || piece.side !== game.turn || game.ballOwnerId !== piece.id || game.ap < (through ? 2 : 1)) return [];
+  return game.pieces.filter((p) => !p.red && !p.vacant && !pieceTemporarilyOut(game, p) && p.side === piece.side && p.id !== piece.id).map((target) => {
     const d = distance(piece, target);
     const maxRange = clamp(Math.round(piece.pass / (through ? 10 : 12)), 4, through ? 9 : 8);
     if (d > maxRange) return null;
@@ -1444,7 +1714,7 @@ function passOptions(game, pieceId, through = false) {
 function tackleOptions(game, pieceId) {
   const piece = getPiece(game, pieceId);
   const carrier = getPiece(game, game.ballOwnerId);
-  if (!piece || !carrier || game.ended || piece.red || piece.side !== game.turn || carrier.side === piece.side || game.ap < 1) return [];
+  if (!piece || !carrier || game.ended || piece.red || piece.vacant || pieceTemporarilyOut(game, piece) || piece.side !== game.turn || carrier.side === piece.side || game.ap < 1) return [];
   const d = distance(piece, carrier);
   if (d > 1) return [];
   const help = supportAt(game, piece.side, carrier.x, carrier.y);
@@ -1458,10 +1728,24 @@ function tackleOptions(game, pieceId) {
   const reasons = [reason("defend", piece.defend * 0.43), reason("bantuan", help * 5), reason("role", roleBonus), reason("stamina", stamina), reason("taktik", tacticMod(game, piece.side, "tackle")), reason("dribble lawan", -carrier.dribble * 0.25)];
   return [{ target: carrier, chance: Math.round(chance), cost: 1, reasons }];
 }
+function oneOnOneInfo(game, piece) {
+  if (!piece) return { active: false, defenders: 0, label: "" };
+  const dir = directionOf(piece.side);
+  const defenders = game.pieces.filter((p) => {
+    if (p.red || p.vacant || pieceTemporarilyOut(game, p) || p.side === piece.side || p.role === "GK") return false;
+    const forward = (p.y - piece.y) * dir;
+    if (forward < 1 || forward > 4) return false;
+    return Math.abs(p.x - piece.x) <= 2;
+  });
+  const keeper = keeperForSide(game, otherSide(piece.side));
+  const active = goalDistance(piece) <= 4 && defenders.length === 0 && Boolean(keeper);
+  return { active, defenders: defenders.length, label: active ? "One on one: tidak ada bek di depan" : "" };
+}
+
 function shotInfo(game, pieceId) {
   const piece = getPiece(game, pieceId);
   const blocked = { can: false, chance: 0, cost: 2, xg: 0, label: "Tidak bisa tembak", laneInfo: null, needsSkill: false };
-  if (!piece || game.ended || piece.red || piece.side !== game.turn || game.ballOwnerId !== piece.id || piece.role === "GK" || game.ap < 1) return blocked;
+  if (!piece || game.ended || piece.red || piece.vacant || pieceTemporarilyOut(game, piece) || piece.side !== game.turn || game.ballOwnerId !== piece.id || piece.role === "GK" || game.ap < 1) return blocked;
 
   const d = goalDistance(piece);
   const laneInfo = shotLaneInfo(piece);
@@ -1472,7 +1756,9 @@ function shotInfo(game, pieceId) {
   const cost = skillMoveShot && d > laneInfo.baseRange ? 1 : 2;
   const zoneAllowed = laneInfo.baseRange > 0 && d <= maxRange;
   const can = zoneAllowed && game.ap >= cost;
-  const press = pressureAt(game, piece.side, piece.x, piece.y);
+  const rawPress = pressureAt(game, piece.side, piece.x, piece.y);
+  const oneOnOne = oneOnOneInfo(game, piece);
+  const press = oneOnOne.active ? 0 : rawPress;
   const keeperStatus = keeperCoverage(game, otherSide(piece.side));
   const keeper = keeperStatus.keeper;
   const laneBonus = laneInfo.lane === "straight" ? 13 : laneInfo.lane === "side" ? 4 : -18;
@@ -1485,7 +1771,8 @@ function shotInfo(game, pieceId) {
   chance += piece.side === "home" ? 2 : 0;
   if (skillShot) chance += d > laneInfo.baseRange ? 14 : 6;
   if (effect(game, piece.side, "counter")) chance += 9;
-  if (effect(game, otherSide(piece.side), "park")) chance -= 15;
+  if (effect(game, otherSide(piece.side), "park") && !oneOnOne.active) chance -= 15;
+  if (oneOnOne.active) chance += 17;
   const keeperWall = keeper ? ((keeper.overall || 65) * 0.16 + traitBonus(keeper, "block") + roleSkillBonus(keeper, "save") + tacticMod(game, keeper.side, "block")) * keeperStatus.coverage : 0;
   chance += emptyGoalBonus;
   chance -= d * 7.5 + press * 11 + keeperWall;
@@ -1495,13 +1782,14 @@ function shotInfo(game, pieceId) {
   chance = clamp(chance, 3, keeperStatus.inGoal ? 91 : 88);
 
   let label = chance >= 65 ? "Peluang emas" : chance >= 45 ? "Bagus" : chance >= 25 ? "Spekulasi" : "Sulit";
-  if (!keeperStatus.inGoal && can) label = `Gawang kosong ${label}`;
+  if (oneOnOne.active && can) label = `One on one ${label}`;
+  else if (!keeperStatus.inGoal && can) label = `Gawang kosong ${label}`;
   if (!can) {
     label = !zoneAllowed ? (laneInfo.baseRange <= 0 ? "Geser ke jalur gawang" : needsSkill ? "Butuh skill/Long Shot" : `Terlalu jauh (${shotZoneText({ laneInfo })})`) : `AP kurang (${cost}AP)`;
   } else if (skillShot && d > laneInfo.baseRange) {
     label = `Skill shot ${label}`;
   }
-  const reasons = [reason("shoot/akurasi", piece.shoot * 0.56), reason("jalur", laneBonus), reason("role", roleBonus), reason("stamina", stamina), reason("taktik", tacticMod(game, piece.side, "shot")), reason("jarak", -d * 7.5), reason("pressure", -press * 11), reason(keeperStatus.inGoal ? "GK/blok" : "GK keluar/gawang kosong", keeperStatus.inGoal ? -keeperWall : emptyGoalBonus), reason("kotak", inBox ? 11 : 0)];
+  const reasons = [reason("shoot/akurasi", piece.shoot * 0.56), reason("jalur", laneBonus), reason("role", roleBonus), reason("stamina", stamina), reason("taktik", tacticMod(game, piece.side, "shot")), reason("one on one", oneOnOne.active ? 17 : 0), reason("jarak", -d * 7.5), reason("pressure", -press * 11), reason(keeperStatus.inGoal ? "GK/blok" : "GK keluar/gawang kosong", keeperStatus.inGoal ? -keeperWall : emptyGoalBonus), reason("kotak", inBox ? 11 : 0)];
   return { can, chance: Math.round(chance), cost, xg: clamp(chance / 100, 0.03, 0.91), label, laneInfo, maxRange, needsSkill: needsSkill && !skillShot, reasons, keeperInGoal: keeperStatus.inGoal, keeperCoverage: keeperStatus.coverage };
 }
 
@@ -1558,18 +1846,34 @@ function keyMomentText(game) {
   const moments = (game.history || []).filter((h) => /GOOOL|PENALTI|corner|Free kick|intercept|cedera|tackle|melenceng|menepis/i.test(h.text)).slice(0, 5);
   return moments.length ? moments : (game.history || []).slice(0, 5);
 }
-function inboxItems({ myTeam, fixture, week, cash, scoutQueue, storyLog, market, facilities, trainingPlan, active }) {
+function inboxItems({ myTeam, fixture, fixtures = [], week, cash, scoutQueue, pendingTransfers = [], storyLog, market, facilities, trainingPlan, active }) {
   const items = [];
-  if (fixture) items.push({ icon: "📅", title: `Pekan ${week}: ${fixture.homeId === MY_TEAM_ID ? "Home" : "Away"}`, body: "Siapkan taktik, training, dan lineup sebelum klik Main Pekan." });
-  if (cash <= INITIAL_CASH) items.push({ icon: "💰", title: "Budget ketat", body: "Kas Rp 50.000 tidak cukup untuk banyak pemain menengah. Manfaatkan scout, loan, dan home income." });
-  if (scoutQueue?.length) items.push({ icon: "🔎", title: `${scoutQueue.length} scout report tertunda`, body: "Mainkan satu match untuk membuka report potensi pemain." });
-  const bestAffordable = (market || []).filter((p) => p.value <= cash).sort((a, b) => b.overall - a.overall)[0];
-  if (bestAffordable) items.push({ icon: "🛒", title: "Target transfer terjangkau", body: `${bestAffordable.name} (${bestAffordable.pos}, OVR ${bestAffordable.overall}) bisa dibeli dengan kas sekarang.` });
-  if (storyLog?.some((e) => !e.choice)) items.push({ icon: "🗞️", title: "Ada story event belum dijawab", body: "Buka Story untuk mengubah trust, fans, atau arah skuad." });
-  const tired = myTeam?.players?.filter((p) => (p.fitness || 100) < 65).length || 0;
-  if (tired) items.push({ icon: "🩺", title: `${tired} pemain kurang fit`, body: `Training ${trainingPlan}; Medical Lv ${facilities?.medical || 1}. Rotasi bisa mengurangi risiko cedera.` });
-  if (active?.game) items.push({ icon: "⚽", title: "Match sedang berjalan", body: "Kembali ke Match untuk menyelesaikan pekan sebelum lanjut career loop." });
-  return items.slice(0, 7);
+  const weekMatches = fixtures?.length || (fixture ? 1 : 0);
+  if (active?.game) items.push({ icon: "⚽", title: "Match sedang berjalan", body: "Kembali ke Match untuk menyelesaikan pekan sebelum career loop lanjut.", actionTab: "match", actionLabel: "Kembali Match" });
+  if (fixture) items.push({ icon: weekMatches > 1 ? "📅📅" : "📅", title: `Pekan ${week}: ${weekMatches} laga tim kamu`, body: `${fixture.homeId === MY_TEAM_ID ? "Home" : "Away"} · ${fixture.cupName || leagueName(fixture.leagueKey)}. Masuk pre-match untuk cek lawan, formasi, dan lineup sebelum mulai.`, actionTab: "match", actionLabel: "Atur Match" });
+  const offers = seniorPlayers(myTeam).filter((p) => p.pendingOffer).length;
+  if (offers) items.push({ icon: "📩", title: `${offers} offer transfer/loan menunggu`, body: "Keputusan ada di tangan user: terima, tolak, atau ajukan ulang. Jangan biarkan offer penting terlewat.", actionTab: "squad", actionLabel: "Buka Skuad" });
+  const pendingYouth = academyPlayers(myTeam).filter((p) => p.pendingSquadAction?.type === "promoteYouth").length;
+  const academyReady = academyPlayers(myTeam).filter((p) => !p.pendingSquadAction && !p.listedForSale && !p.listedForLoan).sort((a, b) => (b.potential - b.overall) - (a.potential - a.overall))[0];
+  if (pendingYouth) items.push({ icon: "🌱", title: `${pendingYouth} youth menunggu promosi`, body: "Promosi akan diproses setelah pekan selesai. Pemain akan masuk skuad senior dengan gaji dan kontrak.", actionTab: "youth", actionLabel: "Cek Youth" });
+  else if (academyReady) items.push({ icon: "🌱", title: `Akademi: ${firstName(academyReady.name)} siap dipantau`, body: `${academyReady.pos} OVR ${academyReady.overall}, potensi ${academyReady.scouted ? academyReady.potential : "belum dibuka"}. Youth refresh tiap 20 pekan, jadi pantau sebelum hilang.`, actionTab: "youth", actionLabel: "Buka Youth" });
+  const expiring = seniorPlayers(myTeam).filter((p) => (p.contract || 0) <= 1 && !p.pendingSquadAction).length;
+  if (expiring) items.push({ icon: "🧾", title: `${expiring} kontrak hampir habis`, body: "Perpanjang kontrak dari menu Skuad. Jika kontrak habis dan tidak diperpanjang, pemain bisa menjadi free agent.", actionTab: "squad", actionLabel: "Urus Kontrak" });
+  if (cash <= INITIAL_CASH) items.push({ icon: "💰", title: "Budget ketat", body: "Kas awal tidak cukup untuk banyak pemain menengah. Manfaatkan loan, scout, home income, dan akademi.", actionTab: "transfer", actionLabel: "Cari Murah" });
+  if (scoutQueue?.length) items.push({ icon: "🔎", title: `${scoutQueue.length} scout report berjalan`, body: `Scout selesai maksimal 7 pekan. Selama scout berjalan kamu tidak bisa spam pencarian lagi.`, actionTab: "transfer", actionLabel: "Cek Scout" });
+  if (pendingTransfers?.length) items.push({ icon: "🕒", title: `${pendingTransfers.length} transfer masuk menunggu registrasi`, body: pendingTransfers.map((t) => `${t.player?.name || "Pemain"} masuk pekan ${t.dueWeek}`).join(" · "), actionTab: "transfer", actionLabel: "Cek Transfer" });
+  const scoutReady = (market || []).filter((p) => p.randomScout || p.scoutReportWeek).sort((a, b) => (b.scoutReportWeek || 0) - (a.scoutReportWeek || 0))[0];
+  if (scoutReady) items.push({ icon: "🔎", title: `Scout menemukan ${scoutReady.name}`, body: `${scoutReady.pos} OVR ${scoutReady.overall}, POT ${scoutReady.scouted ? scoutReady.potential : "??"}. Buka Transfer untuk lihat detail, kontrak sementara/loan, beli, atau tolak.`, actionTab: "transfer", actionLabel: "Buka Report" });
+  const bestAffordable = (market || []).filter((p) => p.value <= cash && !p.userListed).sort((a, b) => b.overall - a.overall)[0];
+  if (bestAffordable) items.push({ icon: "🛒", title: "Target transfer terjangkau", body: `${bestAffordable.name} (${bestAffordable.pos}, OVR ${bestAffordable.overall}) masuk budget sekarang. Cek dulu potensi lewat tombol scout/potensi.`, actionTab: "transfer", actionLabel: "Buka Transfer" });
+  const openStory = storyLog?.filter((e) => !e.choice).length || 0;
+  const meetingUsed = storyLog?.some((e) => e.manualMeeting && e.week === week);
+  if (openStory) items.push({ icon: "🗞️", title: `${openStory} story event belum dijawab`, body: "Jawaban manager memengaruhi fans, board, kas, reputasi, rivalitas, berita, dan morale.", actionTab: "story", actionLabel: "Jawab Story" });
+  else items.push({ icon: "🎙️", title: meetingUsed ? "Meeting media pekan ini sudah dipakai" : "Meeting media tersedia", body: meetingUsed ? "Buka meeting hanya 1x per pekan agar tidak bisa spam efek story." : "Buka 1 meeting opsional pekan ini untuk memancing berita dan dampak klub.", actionTab: "story", actionLabel: "Buka Story" });
+  const tired = seniorPlayers(myTeam).filter((p) => (p.fitness || 100) < 65).length || 0;
+  if (tired) items.push({ icon: "🩺", title: `${tired} pemain kurang fit`, body: `Training ${trainingPlan}; Medical Lv ${facilities?.medical || 1}. Rotasi dan recovery mengurangi risiko cedera fatal.`, actionTab: "training", actionLabel: "Atur Latihan" });
+  items.push({ icon: "🗓️", title: "Kalender & jadwal", body: `Season 60 pekan. Pekan dengan 2+ laga dipisah tanggal supaya tidak terlalu berdekatan.`, actionTab: "calendar", actionLabel: "Lihat Kalender" });
+  return items.slice(0, 10);
 }
 
 function appendLog(game, icon, text, event = null) {
@@ -1583,6 +1887,7 @@ function appendLog(game, icon, text, event = null) {
 function advanceMatchClock(game, seconds = REALTIME_TICK_SECONDS) {
   if (!game || game.ended || game.goalPause) return game;
   game.clockSeconds = clamp((game.clockSeconds || 0) + seconds, 0, MATCH_CLOCK_SECONDS);
+  recoverMinorInjuries(game);
   finishIfNeeded(game);
   return game;
 }
@@ -1644,72 +1949,110 @@ function resetAfterGoal(game, scorerSide) {
   game.actionNo += 1;
 }
 function nearestEnemy(game, side, cell) {
-  return game.pieces.filter((p) => !p.red && p.side !== side).map((p) => ({ p, d: manhattan(p, cell) })).sort((a, b) => a.d - b.d || b.p.defend - a.p.defend)[0]?.p || null;
+  return game.pieces.filter((p) => !p.red && !p.vacant && !pieceTemporarilyOut(game, p) && p.side !== side).map((p) => ({ p, d: manhattan(p, cell) })).sort((a, b) => a.d - b.d || b.p.defend - a.p.defend)[0]?.p || null;
 }
 function nearestFriend(game, side, cell) {
-  return game.pieces.filter((p) => !p.red && p.side === side).map((p) => ({ p, d: manhattan(p, cell) })).sort((a, b) => a.d - b.d || b.p.overall - a.p.overall)[0]?.p || null;
+  return game.pieces.filter((p) => !p.red && !p.vacant && !pieceTemporarilyOut(game, p) && p.side === side).map((p) => ({ p, d: manhattan(p, cell) })).sort((a, b) => a.d - b.d || b.p.overall - a.p.overall)[0]?.p || null;
 }
 function isPenaltyArea(piece) {
   const d = goalDistance(piece);
   return d <= 2 && GOAL_COLS.some((c) => Math.abs(piece.x - c) <= 1);
 }
-function possibleInjury(game, piece, reason = "duel") {
-  const guard = trainingBonus(game, "injuryGuard") + (game.facilities?.medical || 1) * 2;
-  const risk = clamp((piece.energy < 35 ? 9 : 2) + (reason === "hard" ? 5 : 0) + (piece.personality === "Injury Prone" ? 5 : 0) + (game.isDerby ? 2 : 0) - guard, 0, 22);
-  if (roll(risk)) {
-    piece.injured = true;
-    game.stats[piece.side].injuries += 1;
-    appendLog(game, "🏥", `${firstName(piece.name)} cedera setelah ${reason}.`, { type: "injury", side: piece.side, playerId: piece.playerId, player: piece.name, weeks: rng(1, 4) });
-  }
+function pieceTemporarilyOut(game, piece) { return Boolean(piece?.knockUntil && (piece.knockUntil || 0) > (game?.clockSeconds || 0)); }
+function recoverMinorInjuries(game) {
+  (game.pieces || []).forEach((p) => {
+    if (p.knockUntil && p.knockUntil <= (game.clockSeconds || 0) && !p.red && !p.vacant) {
+      p.knockUntil = 0;
+      p.minorInjury = false;
+      appendLog(game, "🟢", `${firstName(p.name)} sudah pulih dari cedera ringan dan bisa bergerak normal lagi.`);
+    }
+  });
 }
-function autoReplaceInjuredPiece(game, piece, reason = "duel") {
-  if (!piece || piece.red) return;
+function makeInjuryEvent(game, piece, type, weeks = 0) {
+  return { type: "injury", injuryType: type, side: piece.side, playerId: piece.playerId, player: piece.name, weeks };
+}
+function possibleInjury(game, piece, reason = "duel") {
+  if (!piece || piece.red || piece.vacant) return;
+  const guard = trainingBonus(game, "injuryGuard") + (game.facilities?.medical || 1) * 2;
+  const risk = clamp((piece.energy < 35 ? 9 : 2) + (reason === "hard" || reason.includes("keras") ? 5 : 0) + (piece.personality === "Injury Prone" ? 5 : 0) + (game.isDerby ? 2 : 0) - guard, 0, 22);
+  if (!roll(risk)) return;
+  const severeChance = clamp(12 + (reason.includes("keras") ? 18 : 0) + (piece.energy < 25 ? 12 : 0) + (piece.personality === "Injury Prone" ? 10 : 0) - (game.facilities?.medical || 1) * 3, 4, 48);
+  if (roll(severeChance)) autoReplaceInjuredPiece(game, piece, reason, true);
+  else autoReplaceInjuredPiece(game, piece, reason, false);
+}
+function autoReplaceInjuredPiece(game, piece, reason = "duel", forceFatal = null) {
+  if (!piece || piece.red || piece.vacant) return;
   const oldName = piece.name;
   const oldPlayerId = piece.playerId;
-  const weeks = rng(1, 5);
-  piece.injured = true;
+  const fatal = forceFatal === null ? roll(reason.includes("keras") ? 38 : 18) : forceFatal;
   game.stats[piece.side].injuries += 1;
-  appendLog(game, "🏥", `${firstName(oldName)} cedera (${reason}) dan harus diganti.`, { type: "injury", side: piece.side, playerId: oldPlayerId, player: oldName, weeks });
-  const bench = game.bench?.[piece.side] || [];
-  const compat = COMPATIBLE[piece.role] || [piece.role];
-  let idx = bench.findIndex((p) => compat.includes(p.pos));
-  if (idx < 0) idx = bench.findIndex(Boolean);
-  const sub = idx >= 0 ? bench.splice(idx, 1)[0] : null;
-  if (!sub) {
-    piece.red = true;
-    appendLog(game, "🚑", `${piece.teamName} tidak punya pengganti siap. Tim bermain dengan 10 pemain.`);
-    if (game.ballOwnerId === piece.id) game.ballOwnerId = kickoffPlayer(game.pieces, otherSide(piece.side)) || game.ballOwnerId;
+  if (!fatal) {
+    const minutes = rng(4, 12);
+    piece.minorInjury = true;
+    piece.knockUntil = Math.min(MATCH_CLOCK_SECONDS - 1, (game.clockSeconds || 0) + minutes * 60);
+    piece.energy = clamp(piece.energy - rng(12, 24), 0, 100);
+    piece.morale = clamp((piece.morale || 70) - 2, 25, 99);
+    appendLog(game, "🩹", `${firstName(oldName)} cedera ringan setelah ${reason}. Ia menepi sekitar ${minutes} menit game, lalu bisa ikut main lagi.`, makeInjuryEvent(game, piece, "minor", 0));
     return;
   }
+  const weeks = Math.max(1, rng(2, 9) - Math.floor((game.facilities?.medical || 1) / 2));
+  appendLog(game, "🚑", `${firstName(oldName)} cedera FATAL (${reason}) dan posisinya dikosongkan. User wajib memilih pengganti dari bench.`, makeInjuryEvent(game, piece, "fatal", weeks));
+  if (game.ballOwnerId === piece.id) game.ballOwnerId = nearestFriend(game, piece.side, piece)?.id || kickoffPlayer(game.pieces, otherSide(piece.side)) || null;
   Object.assign(piece, {
-    playerId: sub.id, name: sub.name, trait: sub.trait, roleSkills: roleSkillsFor(piece.role), personality: sub.personality, overall: sub.overall,
-    pace: sub.pace, shoot: sub.shoot, pass: sub.pass, dribble: sub.dribble, defend: sub.defend,
-    stamina: sub.stamina, energy: clamp(sub.fitness || 88, 50, 100), morale: clamp(sub.morale || 70, 40, 99),
-    yellow: 0, red: false, injured: false, subbedIn: true, role: piece.role,
+    playerId: null,
+    name: `${piece.role} KOSONG`,
+    vacant: true,
+    mustSub: true,
+    originalPlayerId: oldPlayerId,
+    originalPlayerName: oldName,
+    fatalInjuryWeeks: weeks,
+    overall: 1,
+    pace: 1,
+    shoot: 1,
+    pass: 1,
+    dribble: 1,
+    defend: 1,
+    stamina: 1,
+    energy: 0,
+    morale: 25,
+    yellow: 0,
+    injured: true,
   });
-  appendLog(game, "🔁", `${firstName(sub.name)} masuk menggantikan ${firstName(oldName)}.`);
 }
 
+function benchFitScore(player, role, currentOverall = 60) {
+  const compat = COMPATIBLE[role] || [role];
+  const exact = player.pos === role ? 100 : 0;
+  const compatible = compat.includes(player.pos) ? 52 : 0;
+  const sameLine = ((["LB", "CB", "RB", "CDM"].includes(role) && ["LB", "CB", "RB", "CDM"].includes(player.pos))
+    || (["CM", "CAM", "LM", "RM"].includes(role) && ["CM", "CAM", "LM", "RM", "CDM"].includes(player.pos))
+    || (["ST", "LW", "RW"].includes(role) && ["ST", "LW", "RW", "CAM"].includes(player.pos))) ? 20 : 0;
+  const quality = Math.round((player.overall || 50) - Math.max(0, currentOverall - 8));
+  const fitness = Math.round((player.fitness || 90) / 8);
+  return exact + compatible + sameLine + quality + fitness;
+}
 function compatibleBenchForPiece(game, piece) {
   if (!piece) return [];
-  const compat = COMPATIBLE[piece.role] || [piece.role];
-  return (game.bench?.[piece.side] || []).filter((p) => compat.includes(p.pos) || p.overall >= piece.overall - 6).slice(0, 6);
+  return (game.bench?.[piece.side] || [])
+    .filter((p) => p && (p.injuredWeeks || 0) <= 0 && (p.bannedWeeks || 0) <= 0)
+    .slice()
+    .sort((a, b) => benchFitScore(b, piece.role, piece.overall) - benchFitScore(a, piece.role, piece.overall) || b.overall - a.overall);
 }
 function applyManualSub(game, pieceId, benchId) {
   const piece = getPiece(game, pieceId);
   if (!piece || piece.red || game.ended || game.goalPause) return game;
-  if (game.turn !== piece.side || game.ap < 1) return game;
+  if (game.turn !== piece.side || (!piece.vacant && game.ap < 1)) return game;
   if ((game.subCount?.[piece.side] || 0) >= 5) { appendLog(game, "🚫", "Jatah substitution sudah habis."); return game; }
   const bench = game.bench?.[piece.side] || [];
   const idx = bench.findIndex((p) => String(p.id) === String(benchId));
   if (idx < 0) return game;
   const sub = bench.splice(idx, 1)[0];
-  const old = { name: piece.name, playerId: piece.playerId, trait: piece.trait, overall: piece.overall, pace: piece.pace, shoot: piece.shoot, pass: piece.pass, dribble: piece.dribble, defend: piece.defend, stamina: piece.stamina, energy: piece.energy, personality: piece.personality };
-  bench.push({ id: old.playerId, name: old.name, pos: piece.role, trait: old.trait, overall: old.overall, pace: old.pace, shoot: old.shoot, pass: old.pass, dribble: old.dribble, defend: old.defend, stamina: old.stamina, fitness: clamp(old.energy - 8, 20, 100), personality: old.personality, morale: piece.morale, value: 0 });
-  Object.assign(piece, { playerId: sub.id, name: sub.name, trait: sub.trait, roleSkills: roleSkillsFor(piece.role), personality: sub.personality, overall: sub.overall, pace: sub.pace, shoot: sub.shoot, pass: sub.pass, dribble: sub.dribble, defend: sub.defend, stamina: sub.stamina, energy: clamp(sub.fitness || 92, 55, 100), morale: clamp(sub.morale || 70, 40, 99), subbedIn: true });
+  const old = { name: piece.name, playerId: piece.playerId, trait: piece.trait, overall: piece.overall, pace: piece.pace, shoot: piece.shoot, pass: piece.pass, dribble: piece.dribble, defend: piece.defend, stamina: piece.stamina, energy: piece.energy, personality: piece.personality, vacant: piece.vacant };
+  if (!piece.vacant && old.playerId) bench.push({ id: old.playerId, name: old.name, pos: piece.role, trait: old.trait, overall: old.overall, pace: old.pace, shoot: old.shoot, pass: old.pass, dribble: old.dribble, defend: old.defend, stamina: old.stamina, fitness: clamp(old.energy - 8, 20, 100), personality: old.personality, morale: piece.morale, value: 0 });
+  Object.assign(piece, { playerId: sub.id, name: sub.name, trait: sub.trait, roleSkills: roleSkillsFor(piece.role), personality: sub.personality, overall: sub.overall, pace: sub.pace, shoot: sub.shoot, pass: sub.pass, dribble: sub.dribble, defend: sub.defend, stamina: sub.stamina, energy: clamp(sub.fitness || 92, 55, 100), morale: clamp(sub.morale || 70, 40, 99), subbedIn: true, vacant: false, mustSub: false, injured: false, minorInjury: false, knockUntil: 0 });
   game.subCount[piece.side] = (game.subCount[piece.side] || 0) + 1;
-  appendLog(game, "🔁", `${firstName(sub.name)} masuk menggantikan ${firstName(old.name)}. Substitution ${game.subCount[piece.side]}/5.`);
-  advanceMatchClock(game, 25);
+  appendLog(game, "🔁", `${firstName(sub.name)} masuk ${old.vacant ? "mengisi posisi kosong" : `menggantikan ${firstName(old.name)}`}. Substitution ${game.subCount[piece.side]}/5.`);
+  if (!old.vacant) advanceMatchClock(game, 25);
   return applyAutoShape(game);
 }
 function setPieceInfo(game, setPiece = game?.setPiece) {
@@ -1816,7 +2159,7 @@ function applyAction(game, action) {
   if (action.type === "end") { appendLog(next, "⏭️", `${sideLabel(next.turn)} mengakhiri giliran.`); switchTurn(next); return next; }
 
   const piece = getPiece(next, action.pieceId);
-  if (!piece || piece.red || piece.side !== next.turn) return next;
+  if (!piece || piece.red || piece.vacant || pieceTemporarilyOut(next, piece) || piece.side !== next.turn) return next;
   const side = piece.side;
   const chaotic = effect(next, side, "chaos") ? rng(-18, 24) : 0;
 
@@ -1923,7 +2266,12 @@ function applyAction(game, action) {
         next.stats[side].yellows += 1;
         piece.playerCard = piece.yellow >= 2 ? "red" : "yellow";
         cardText = piece.yellow >= 2 ? " Kartu kuning kedua, merah!" : " Kartu kuning.";
-        if (piece.yellow >= 2) { piece.red = true; next.stats[side].reds += 1; }
+        if (piece.yellow >= 2) {
+          piece.red = true;
+          next.stats[side].reds += 1;
+          if (next.ballOwnerId === piece.id) next.ballOwnerId = option.target.id;
+          appendLog(next, "🟥", `${firstName(piece.name)} mendapat kartu merah dan keluar permanen. Pemain kartu merah tidak bisa digantikan cadangan.`, { type: "red", side, team: piece.teamName, playerId: piece.playerId, player: piece.name });
+        }
       }
       if (isPenaltyArea(option.target)) {
         const shooter = option.target;
@@ -2068,7 +2416,7 @@ function bestAiAction(game) {
   const difficulty = game.aiDifficulty || "Normal";
   const aiBoost = difficultyProfile(difficulty).aiBonus;
   const offBallBoost = difficultyProfile(difficulty).offBall;
-  const mine = game.pieces.filter((p) => !p.red && p.side === game.turn);
+  const mine = game.pieces.filter((p) => !p.red && !p.vacant && !pieceTemporarilyOut(game, p) && p.side === game.turn);
   const carrier = getPiece(game, game.ballOwnerId);
   const candidates = [];
   const add = (action, score, label) => candidates.push({ action, score: score + scoreActionNoise(style, difficulty) + aiBoost, label });
@@ -2105,7 +2453,7 @@ function bestAiAction(game) {
     const forwardRuns = legalRunCells(game, carrier.id)
       .map((cell) => ({ cell, progress: goalDistance(carrier) - goalDistance({ ...carrier, ...cell }), pressure: pressureAt(game, carrier.side, cell.x, cell.y), support: supportAt(game, carrier.side, cell.x, cell.y) }))
       .filter((r) => r.progress >= 0 && r.pressure <= (style === "Chaos" ? 3 : 2.2))
-      .sort((a, b) => (b.progress * 13 + b.support * 4 - b.pressure * 5) - (a.progress * 13 + a.support * 4 - a.pressure * 5));
+      .sort((a, b) => (b.progress * 13 + b.support * 4 - b.pressure * 5 - aiCornerPenalty(b.cell, carrier.side, style)) - (a.progress * 13 + a.support * 4 - a.pressure * 5 - aiCornerPenalty(a.cell, carrier.side, style)));
     if (!trap.trapped && forwardRuns.length && rng(1, 100) <= (style === "Counter" || game.aiPlan === "Risky Dribble" ? 50 : 28)) {
       const top = forwardRuns.slice(0, Math.min(3, forwardRuns.length));
       const chosen = pick(top).cell;
@@ -2115,7 +2463,7 @@ function bestAiAction(game) {
       const progress = goalDistance(carrier) - goalDistance({ ...carrier, ...cell });
       const nextPressure = pressureAt(game, carrier.side, cell.x, cell.y);
       const nextSupport = supportAt(game, carrier.side, cell.x, cell.y);
-      let score = progress * 34 - Math.abs(cell.x - centerX()) * 2 - nextPressure * 9 + nextSupport * 5 - trap.level * 7;
+      let score = progress * 34 - Math.abs(cell.x - centerX()) * 2 - nextPressure * 9 + nextSupport * 5 - trap.level * 7 - aiCornerPenalty(cell, carrier.side, style);
       if (goalDistance({ ...carrier, ...cell }) <= 3) score += 34;
       if (shotLaneInfo({ ...carrier, ...cell }).baseRange > 0 && goalDistance({ ...carrier, ...cell }) <= SHOT_STRAIGHT_RANGE) score += 12;
       if (style === "Wing Play" && isWide(cell.x)) score += 22;
@@ -2130,7 +2478,7 @@ function bestAiAction(game) {
         const widthBonus = isWide(cell.x) ? tacticMod(game, game.turn, "width") : 0;
         const centralBonus = Math.max(0, 5 - Math.abs(cell.x - centerX()));
         const receiveLane = interceptionInfo(game, carrier, { ...p, ...cell }, false).risk;
-        let score = tacticMod(game, game.turn, "offBall") + offBallBoost + progress * 12 + nearCarrier * 4 + centralBonus + widthBonus - pressureAt(game, p.side, cell.x, cell.y) * 5 - receiveLane * 0.5;
+        let score = tacticMod(game, game.turn, "offBall") + offBallBoost + progress * 12 + nearCarrier * 4 + centralBonus + widthBonus - pressureAt(game, p.side, cell.x, cell.y) * 5 - receiveLane * 0.5 - aiCornerPenalty(cell, p.side, style);
         if (["ST", "LW", "RW", "CAM"].includes(p.role) && goalDistance({ ...p, ...cell }) <= 5) score += 18;
         if (["LB", "RB", "LM", "RM", "LW", "RW"].includes(p.role) && style === "Wing Play" && isWide(cell.x)) score += 24;
         if (["CDM", "CM"].includes(p.role) && ["Possession", "Tiki Taka"].includes(style)) score += 18;
@@ -2224,6 +2572,7 @@ function tickPlayerStatus(players, affected = new Map(), win = false) {
 function endSeasonRollover(teams, season, competitionState = initialCompetitionState(season)) {
   const history = [];
   const news = [];
+  const freeAgents = [];
   let nextTeams = teams.map((t) => ({ ...t, trophies: t.trophies || [] }));
   if (competitionState?.numberOne?.championId) {
     nextTeams = nextTeams.map((t) => t.id === competitionState.numberOne.championId && !(t.trophies || []).some((tr) => tr.season === season && tr.name === "Number 1 Championship") ? { ...t, numberOneTitles: (t.numberOneTitles || 0) + 1, trophies: [{ season, name: "Number 1 Championship", mark: "NO.1" }, ...(t.trophies || [])].slice(0, 14) } : t);
@@ -2255,9 +2604,16 @@ function endSeasonRollover(teams, season, competitionState = initialCompetitionS
     let players = (team.players || []).map((p) => {
       let next = { ...p, age: (p.age || 22) + 1, contract: Math.max(0, (p.contract || 1) - 1), injuredWeeks: Math.max(0, (p.injuredWeeks || 0) - 1), bannedWeeks: 0, yellowCards: 0 };
       if (next.age >= 33 && roll(12 + (next.age - 33) * 7)) return null;
-      if (next.contract <= 0 && team.id !== MY_TEAM_ID && roll(34)) return null;
+      if (next.contract <= 0) {
+        if (team.id === MY_TEAM_ID) {
+          freeAgents.push(freeAgentFromPlayer({ ...next, contract: 0 }, "Contract Expired"));
+          news.push({ id: `contract-expired-${season}-${next.id}`, season, week: SEASON_LENGTH_WEEKS, tag: "Kontrak Habis", icon: "📄", title: `${next.name} meninggalkan klub`, body: `Kontrak habis dan tidak diperpanjang. Pemain pindah ke Transfer sebagai free agent.` });
+          return null;
+        }
+        if (roll(34)) return null;
+      }
       if (next.age >= 31) {
-        next.overall = clamp(next.overall - rng(0, 2), 40, 99);
+        next.overall = clamp(next.overall - rng(0, 2), 40, 98);
         next.pace = clamp((next.pace || 50) - rng(0, 2), 20, 99);
       }
       return recalcPlayerValue(next, team.id);
@@ -2268,11 +2624,17 @@ function endSeasonRollover(teams, season, competitionState = initialCompetitionS
       const kid = genPlayer(pos, team.id, leagueInfo(newLeague).level === 1 ? rng(-5, 0) : rng(-9, -2), true);
       players.push(recalcPlayerValue({ ...kid, academy: true, rarePotential: kid.rarePotential && roll(45), sourceClub: `${team.name} Academy` }, team.id));
     }
+    while (team.id === MY_TEAM_ID && players.length < 18) {
+      const pos = pick(BASE_POSITIONS);
+      const kid = genPlayer(pos, team.id, rng(-10, -5), true);
+      players.push(recalcPlayerValue({ ...kid, academy: true, sourceClub: `${team.name} Emergency Academy`, contract: 1 }, team.id));
+      news.push({ id: `emergency-youth-${season}-${players.length}`, season, week: SEASON_LENGTH_WEEKS, tag: "Youth Intake", icon: "🌱", title: `Akademi menutup kekurangan skuad`, body: `Skuad utama tidak boleh kurang dari 18 pemain, jadi pemain akademi darurat dipromosikan.` });
+    }
     const chaos = starChaos({ ...team, players });
     const morale = clamp((team.morale || 70) + (champ ? 8 : top5 ? 4 : rank >= 10 ? -4 : 0) - (chaos.tooMany ? 5 : 0), 25, 99);
     return resetLeagueTable({ ...team, leagueKey: newLeague, leagueName: leagueName(newLeague), leagueLevel: leagueInfo(newLeague).level, budget: clamp(Math.round(((team.budget || INITIAL_CASH) + prize - Math.round(teamWeeklyWage({ ...team, players }) * 0.04)) / 500) * 500, team.id === MY_TEAM_ID ? -999999 : -50000, team.id === MY_TEAM_ID ? 99999999 : maxAiBudgetForLeague(newLeague)), players: players.sort((a, b) => b.overall - a.overall), morale, trophies: champ ? [{ season, name: league.name }, ...(team.trophies || [])].slice(0, 12) : (team.trophies || []), numberOneTitles: team.numberOneTitles || 0 });
   });
-  return { teams: nextTeams, history, news };
+  return { teams: nextTeams, history, news, freeAgents };
 }
 function runQaDebug(teams, market, fixtureCalendar, week, competitionState) {
   const playerIds = teams.flatMap((t) => (t.players || []).map((p) => p.id));
@@ -2325,7 +2687,7 @@ function aiPreferredPositions(team) {
 }
 function recalcPlayerValue(player, teamId) {
   const value = calcMarketValue(player, teamId, player.academy);
-  return { ...player, value, wage: Math.round(clamp(value * rng(42, 92) / 10000, 500, 46000) / 100) * 100 };
+  return { ...player, value, wage: Math.round(clamp(value * rng(35, 85) / 10000, 500, (player.overall || 60) >= 85 ? 260000 : 65000) / 100) * 100 };
 }
 function growOneAiPlayer(player, team, week, result) {
   let p = { ...player };
@@ -2347,7 +2709,7 @@ function growOneAiPlayer(player, team, week, result) {
   const growthChance = recentGrowthLock || starLock ? 0 : clamp(4 + potentialGap * 1.35 + youthBoost + rareBoost + moraleBoost + formBoost - (p.overall >= 82 ? 10 : 0) - (eliteLock ? 28 : 0), 0, growthCap);
   if (potentialGap > 0 && roll(growthChance)) {
     const gain = p.rarePotential && young && p.overall < 84 && roll(9) ? 2 : 1;
-    p.overall = clamp(p.overall + gain, 45, Math.min(p.potential || 99, p.rarePotential ? 93 : 86));
+    p.overall = clamp(p.overall + gain, 45, Math.min(p.potential || 98, p.ultraRare ? 98 : p.rarePotential ? 96 : 88));
     p.lastGrowthWeek = week;
     const focus = archetype.focus;
     p[focus] = clamp((p[focus] || p.overall) + gain + (roll(25) ? 1 : 0), 10, 99);
@@ -2491,6 +2853,269 @@ function objectiveComplete(obj, ctx) {
   return (ctx.stats[obj.type] || 0) >= obj.target;
 }
 
+function developmentFocusForPlan(plan, pos) {
+  if (plan === "finishing" || plan === "shooting") return "shoot";
+  if (plan === "passing") return "pass";
+  if (plan === "defense") return ["GK", "CB", "LB", "RB", "CDM"].includes(pos) ? "defend" : "stamina";
+  if (plan === "pressing") return "stamina";
+  if (plan === "youth") return "dribble";
+  return ["ST", "LW", "RW"].includes(pos) ? "shoot" : ["CM", "CAM", "CDM"].includes(pos) ? "pass" : ["GK", "CB", "LB", "RB"].includes(pos) ? "defend" : "stamina";
+}
+function addPlayerXP(player, amount, focus, week, forceLabel = "Latihan") {
+  let p = { ...player, xp: Math.min(999, (player.xp || 0) + amount), lastDevWeek: week };
+  const news = [];
+  if (p.xp >= 100) {
+    p.xp -= 100;
+    p.level = (p.level || 1) + 1;
+    const maxOverall = Math.min(p.potential || 98, p.ultraRare ? 98 : p.rarePotential ? 96 : 88);
+    const canOverall = p.overall < maxOverall;
+    if (canOverall) p.overall = clamp(p.overall + 1, 45, maxOverall);
+    p[focus] = clamp((p[focus] || p.overall) + 1 + (p.age <= 21 && roll(25) ? 1 : 0), 10, 99);
+    if (focus !== "stamina" && roll(35)) p.stamina = clamp((p.stamina || 60) + 1, 25, 99);
+    p.value = calcMarketValue(p, p.teamId || MY_TEAM_ID, p.academy);
+    p.wage = Math.round(clamp(p.value * rng(30, 70) / 10000, 500, p.overall >= 85 ? 240000 : 65000) / 100) * 100;
+    news.push({ tag: forceLabel, icon: p.age <= 21 ? "🌱" : "📈", title: `${firstName(p.name)} naik level`, body: `${p.pos} berkembang ke OVR ${p.overall}. Fokus ${focus.toUpperCase()} ikut naik.` });
+  }
+  return { player: p, news };
+}
+function processWeeklyDevelopmentForUserTeam(teams, week, trainingPlan, facilities) {
+  const allNews = [];
+  let youthDeveloped = 0;
+  const trainingLv = facilities?.training || 1;
+  const academyLv = facilities?.academy || 1;
+  const updated = teams.map((team) => {
+    if (team.id !== MY_TEAM_ID) return team;
+    const players = (team.players || []).map((player) => {
+      if (player.lastDevWeek === week) return player;
+      const focus = developmentFocusForPlan(trainingPlan, player.pos);
+      const youth = player.age <= 21;
+      const base = 7 + trainingLv * 5 + (trainingPlan === "balanced" ? 2 : 0);
+      const youthBoost = youth ? 6 + academyLv * 5 + (trainingPlan === "youth" ? 10 : 0) : 0;
+      const moraleBoost = Math.max(0, (player.morale || 70) - 68) / 5;
+      let amount = Math.round(base + youthBoost + moraleBoost + rng(0, trainingLv * 3));
+      const academyBreakthrough = youth && player.academy && roll(5 + academyLv * 4);
+      if (academyBreakthrough) amount += rng(16, 34) + academyLv * 5;
+      const grown = addPlayerXP(player, amount, focus, week, youth ? "Youth Growth" : "Training Ground");
+      if (academyBreakthrough) {
+        grown.player.lastYouthBreakthroughWeek = week;
+        grown.player.morale = clamp((grown.player.morale || 70) + 4, 35, 99);
+        grown.news.push({ tag: "Youth Berprestasi", icon: "🌟", title: `${firstName(player.name)} menonjol di akademi`, body: `Akademi Lv ${academyLv} memberi bonus XP besar. Pemain muda bisa lebih cepat naik level dan masuk radar transfer.` });
+      }
+      if (grown.news.length && youth) youthDeveloped += 1;
+      allNews.push(...grown.news);
+      return grown.player;
+    }).sort((a, b) => b.overall - a.overall || b.potential - a.potential);
+    return { ...team, players };
+  });
+  return { teams: updated, news: allNews.slice(0, 8), youthDeveloped };
+}
+function processYouthAcademyRefresh(teams, week, season = 1, academyLevel = 1) {
+  if (week <= 0 || week % 20 !== 0) return { teams, news: [] };
+  const news = [];
+  const updated = (teams || []).map((team) => {
+    if (team.id !== MY_TEAM_ID) return team;
+    const protectedAcademy = [];
+    const seniorAndOther = [];
+    (team.players || []).forEach((p) => {
+      if (!p.academy) { seniorAndOther.push(p); return; }
+      const keepBecauseProtected = p.listedForSale || p.listedForLoan || p.pendingOffer || p.pendingSquadAction;
+      if (keepBecauseProtected) protectedAcademy.push(p);
+    });
+    const freshCount = Math.max(6, 6 + Math.min(2, Math.floor((academyLevel || 1) / 2)));
+    const fresh = makeAcademyIntake(team, season, academyLevel, freshCount).map((p) => ({
+      ...p,
+      intakeWeek: week,
+      sourceClub: `${team.name} Academy Intake W${week}`,
+      listedForSale: false,
+      listedForLoan: false,
+      pendingOffer: null,
+      pendingSquadAction: null,
+      xp: 0,
+      level: 1,
+    }));
+    news.push({
+      id: `academy-refresh-${season}-${week}`,
+      season,
+      week,
+      tag: "Youth Refresh",
+      icon: "🌱",
+      title: `Akademi membuka intake fresh pekan ${week}`,
+      body: `${fresh.length} pemain akademi baru masuk. Pemain yang sudah senior, sedang ditandai jual, ditandai loan, punya offer, atau menunggu promosi tetap aman dan tidak dihapus.`,
+    });
+    return { ...team, players: [...seniorAndOther, ...protectedAcademy, ...fresh].sort((a, b) => Number(a.academy) - Number(b.academy) || b.overall - a.overall || b.potential - a.potential) };
+  });
+  return { teams: updated, news };
+}
+function processLoanReturns(teams, week) {
+  const returningToUser = [];
+  const returningToOwners = [];
+  const stripped = teams.map((team) => {
+    const keep = [];
+    (team.players || []).forEach((p) => {
+      if (team.id !== MY_TEAM_ID && p.loanOriginId === MY_TEAM_ID && p.loanReturnWeek <= week) {
+        returningToUser.push({ ...p, teamId: MY_TEAM_ID, loan: false, loanedOut: false, loanOriginId: null, loanReturnWeek: null, loanClubName: null, listedForLoan: false, pendingOffer: null });
+      } else if (team.id === MY_TEAM_ID && p.loan && p.loanReturnWeek && p.loanReturnWeek <= week) {
+        returningToOwners.push({ ...p, teamId: p.ownerTeamId || null, loan: false, loanReturnWeek: null, loanClubName: null, pendingOffer: null });
+      } else keep.push(p);
+    });
+    return keep.length === (team.players || []).length ? team : { ...team, players: keep };
+  });
+  let next = stripped;
+  if (returningToUser.length) {
+    next = next.map((team) => team.id === MY_TEAM_ID ? { ...team, players: [...team.players, ...returningToUser].sort((a, b) => b.overall - a.overall) } : team);
+  }
+  if (returningToOwners.length) {
+    next = next.map((team) => {
+      const owned = returningToOwners.filter((p) => p.ownerTeamId && p.ownerTeamId === team.id).map((p) => ({ ...p, teamId: team.id, ownerTeamId: null, sourceClub: team.name }));
+      return owned.length ? { ...team, players: [...team.players, ...owned].sort((a, b) => b.overall - a.overall) } : team;
+    });
+  }
+  const freeAgents = returningToOwners.filter((p) => !p.ownerTeamId).map((p) => makeFreeAgent(p, "Kontrak sementara selesai"));
+  const news = [
+    ...returningToUser.map((p) => ({ tag: "Loan Return", icon: "🔁", title: `${p.name} kembali dari pinjaman`, body: `${p.pos} sudah kembali ke skuad utama setelah masa loan selesai.` })),
+    ...returningToOwners.map((p) => ({ tag: "Loan End", icon: "⏳", title: `${p.name} selesai masa pinjaman`, body: `${p.pos} tidak lagi tersedia di skuad utama setelah kontrak/pinjaman selesai.` })),
+  ];
+  return { teams: next, news, marketAdds: freeAgents };
+}
+
+function processIncomingUserTransfers(teams, pendingTransfers = [], weekToProcess = 1) {
+  if (!pendingTransfers?.length) return { teams, remaining: [], completed: [], news: [] };
+  const completed = pendingTransfers.filter((t) => (t.dueWeek || 999) <= weekToProcess);
+  const remaining = pendingTransfers.filter((t) => (t.dueWeek || 999) > weekToProcess);
+  if (!completed.length) return { teams, remaining, completed: [], news: [] };
+  const arrivals = completed.map((t) => recalcPlayerValue({
+    ...(t.player || {}),
+    teamId: MY_TEAM_ID,
+    ownerTeamId: t.type === "loan" ? (t.ownerTeamId ?? t.player?.ownerTeamId ?? null) : null,
+    sourceClub: t.type === "loan" ? (t.sourceClub || t.player?.sourceClub || "Scout Network") : "Transfer masuk",
+    academy: false,
+    pendingArrival: null,
+    scouted: true,
+    scoutStatus: t.player?.rarePotential ? "gem" : "normal",
+    loan: t.type === "loan",
+    loanWeeks: t.type === "loan" ? t.weeks : undefined,
+    loanReturnWeek: t.type === "loan" ? (t.loanReturnWeek || (weekToProcess + (t.weeks || 15) - 1)) : null,
+    listedForSale: false,
+    listedForLoan: false,
+    pendingOffer: null,
+    contract: t.type === "loan" ? 1 : Math.max(1, t.player?.contract || 2),
+  }, MY_TEAM_ID));
+  const arrivalIds = new Set(arrivals.map((p) => p.id));
+  const nextTeams = teams.map((team) => team.id === MY_TEAM_ID
+    ? { ...team, players: [...(team.players || []).filter((p) => !arrivalIds.has(p.id)), ...arrivals].sort((a, b) => b.overall - a.overall) }
+    : team);
+  const news = arrivals.map((p) => ({
+    id: `arrival-${p.id}-${weekToProcess}`,
+    week: weekToProcess,
+    tag: p.loan ? "Loan Arrival" : "Transfer Arrival",
+    icon: p.loan ? "🤝" : "🛒",
+    title: `${p.name} resmi tersedia di skuad`,
+    body: `${p.pos} OVR ${p.overall} baru bisa dipakai mulai pekan ${weekToProcess}. Transfer/loan sengaja ditunda 1 pekan agar tidak langsung masuk match yang sama.`,
+  }));
+  return { teams: nextTeams, remaining, completed: arrivals, news };
+}
+function processPendingUserSquadActions(teams, week, ctx = {}) {
+  const managerCtx = ctx.manager || { boardTrust: 70, fanTrust: 70 };
+  const academyLv = ctx.facilities?.academy || 1;
+  let cashDelta = 0;
+  let marketAdds = [];
+  const news = [];
+  const cashStart = Number(ctx.cash || 0);
+  const updated = teams.map((team) => {
+    if (team.id !== MY_TEAM_ID) return team;
+    let rosterCount = seniorPlayers(team).length;
+    const players = [];
+    (team.players || []).forEach((p) => {
+      const pending = p.pendingSquadAction;
+      if (!pending || (pending.dueWeek || week + 1) > week) { players.push(p); return; }
+      if (pending.type === "extend") {
+        const offerWage = pending.offerWage || Math.round((p.wage || 500) * 1.25 / 100) * 100;
+        const years = pending.years || rng(1, 3);
+        const acceptChance = clamp(72 + ((managerCtx.boardTrust || 70) - 60) * 0.35 + ((p.morale || 70) - 60) * 0.18 - ((p.overall || 70) >= 85 ? 18 : 0) - ((p.contract || 0) <= 0 ? 8 : 0), 16, 94);
+        if (roll(acceptChance)) {
+          players.push({ ...p, pendingSquadAction: null, contract: Math.min(5, Math.max(0, p.contract || 0) + years), wage: offerWage, morale: clamp((p.morale || 70) + 2, 35, 99) });
+          news.push({ tag: "Kontrak", icon: "📄", title: `${p.name} menerima perpanjangan`, body: `Kontrak +${years} tahun, gaji baru ${money(offerWage)}/pekan. Diproses setelah 1 pekan.` });
+        } else {
+          players.push({ ...p, pendingSquadAction: null, morale: clamp((p.morale || 70) - 3, 35, 99) });
+          news.push({ tag: "Kontrak", icon: "📄", title: `${p.name} menolak perpanjangan`, body: `Agen menilai offer belum cocok. Coba lagi dengan momentum klub lebih baik.` });
+        }
+        return;
+      }
+      if (pending.type === "promoteYouth") {
+        const signingFee = pending.signingFee || 35000;
+        if (!p.academy) {
+          players.push({ ...p, pendingSquadAction: null });
+          return;
+        }
+        if (rosterCount >= 38) {
+          players.push({ ...p, pendingSquadAction: null });
+          news.push({ tag: "Youth Promotion", icon: "⚠️", title: `Promosi ${p.name} gagal`, body: `Skuad utama sudah penuh. Maksimal 38 pemain senior.` });
+        } else if (cashStart + cashDelta >= signingFee) {
+          cashDelta -= signingFee;
+          rosterCount += 1;
+          players.push(recalcPlayerValue({ ...p, academy: false, pendingSquadAction: null, scouted: true, sourceClub: team.name, contract: Math.max(1, p.contract || 1), wage: Math.max(p.wage || 500, Math.round(signingFee * 0.08 / 100) * 100), morale: clamp((p.morale || 70) + 5, 35, 99) }, MY_TEAM_ID));
+          news.push({ tag: "Youth Promotion", icon: "🌱", title: `${p.name} resmi naik ke skuad utama`, body: `Promosi diproses setelah 1 pekan. Signing fee ${money(signingFee)}, gaji awal ${money(Math.max(p.wage || 500, Math.round(signingFee * 0.08 / 100) * 100))}/pekan.` });
+        } else {
+          players.push({ ...p, pendingSquadAction: null });
+          news.push({ tag: "Youth Promotion", icon: "⚠️", title: `Promosi ${p.name} gagal`, body: `Kas tidak cukup saat pekan diproses. Butuh ${money(signingFee)}.` });
+        }
+        return;
+      }
+      if (pending.type === "checkPotential") {
+        const cost = pending.cost || (12000 + academyLv * 2500);
+        if (cashStart + cashDelta >= cost) {
+          cashDelta -= cost;
+          players.push({ ...p, pendingSquadAction: null, scouted: true, scoutStatus: p.rarePotential ? "gem" : "normal" });
+          news.push({ tag: "Scout Potensi", icon: p.rarePotential ? "🌟" : "🔎", title: `Potensi ${p.name} selesai dicek`, body: `${p.pos} OVR ${p.overall}, POT ${p.potential}. Biaya ${money(cost)}.` });
+        } else {
+          players.push({ ...p, pendingSquadAction: null });
+          news.push({ tag: "Scout Potensi", icon: "⚠️", title: `Cek potensi ${p.name} gagal`, body: `Kas tidak cukup saat pekan diproses. Butuh ${money(cost)}.` });
+        }
+        return;
+      }
+      if (pending.type === "kick") {
+        if (rosterCount <= 18) {
+          players.push({ ...p, pendingSquadAction: null });
+          news.push({ tag: "Skuad", icon: "🚫", title: `${p.name} batal di-kick`, body: `Minimal skuad 18 pemain. Aksi dibatalkan saat pekan diproses.` });
+        } else {
+          rosterCount -= 1;
+          marketAdds.push(freeAgentFromPlayer(p, "Free Agent"));
+          news.push({ tag: "Free Agent", icon: "🚪", title: `${p.name} keluar dari skuad`, body: `Kick diproses setelah 1 pekan dan pemain masuk Transfer sebagai free agent.` });
+        }
+        return;
+      }
+      players.push({ ...p, pendingSquadAction: null });
+    });
+    return { ...team, players: players.sort((a, b) => b.overall - a.overall || b.potential - a.potential) };
+  });
+  return { teams: updated, cashDelta, marketAdds, news };
+}
+
+function processUserTransferOffers(teams, week) {
+  const buyers = teams.filter((t) => t.id !== MY_TEAM_ID);
+  const news = [];
+  const updated = teams.map((team) => {
+    if (team.id !== MY_TEAM_ID) return team;
+    const players = (team.players || []).map((p) => {
+      if (p.pendingOffer || (!p.listedForSale && !p.listedForLoan) || p.lastOfferWeek === week) return p;
+      const chance = (p.listedForSale ? 36 : 0) + (p.listedForLoan ? 34 : 0) + Math.max(0, 84 - (p.overall || 70)) * 0.28;
+      if (!roll(chance)) return { ...p, lastOfferWeek: week };
+      const club = buyers[Math.abs((week * 97 + p.id * 13)) % Math.max(1, buyers.length)];
+      const type = p.listedForSale && p.listedForLoan ? (roll(55) ? "sale" : "loan") : p.listedForSale ? "sale" : "loan";
+      const loanWeeks = [3, 15, 30][(week + p.id) % 3];
+      const baseAmount = type === "sale" ? Math.round((p.value || 5000) * rng(64, 112) / 100 / 500) * 500 : Math.round((p.value || 5000) * ({ 3: 0.05, 15: 0.13, 30: 0.22 }[loanWeeks]) / 500) * 500;
+      const offer = { id: `${week}-${p.id}-${club.id}`, type, clubId: club.id, clubName: club.name, amount: Math.max(500, baseAmount), weeks: loanWeeks, countered: false };
+      news.push({ tag: "Offer Masuk", icon: type === "loan" ? "🤝" : "💰", title: `${club.name} menawar ${firstName(p.name)}`, body: `${type === "loan" ? `Loan ${loanWeeks} pekan` : "Transfer permanen"} senilai ${money(offer.amount)}. Putuskan di menu Skuad.` });
+      return { ...p, pendingOffer: offer, lastOfferWeek: week };
+    });
+    return { ...team, players };
+  });
+  return { teams: updated, news };
+}
+function freeAgentFromPlayer(player, sourceClub = "Free Agent") {
+  return { ...player, teamId: null, ownerTeamId: null, sourceClub, freeAgent: true, listedForSale: false, listedForLoan: false, pendingOffer: null, scouted: true, userListed: false, value: Math.round((player.value || 5000) * 0.65 / 500) * 500 };
+}
+
 class ErrorBoundary extends React.Component {
   constructor(props) { super(props); this.state = { error: null }; }
   static getDerivedStateFromError(error) { return { error }; }
@@ -2520,6 +3145,7 @@ function FootballManager() {
   const [market, setMarket] = useState([]);
   const [tab, setTab] = useState("dashboard");
   const [active, setActive] = useState(null);
+  const [preMatch, setPreMatch] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [log, setLog] = useState([]);
@@ -2528,6 +3154,8 @@ function FootballManager() {
   const [lineupOverrides, setLineupOverrides] = useState({});
   const [scoutQueue, setScoutQueue] = useState([]);
   const [scoutUsed, setScoutUsed] = useState(0);
+  const [pendingTransfers, setPendingTransfers] = useState([]);
+  const [transferActionWeek, setTransferActionWeek] = useState(null);
   const [manager, setManager] = useState({ name: "Coach Arjuna", reputation: 1, boardTrust: 70, fanTrust: 70 });
   const [storyLog, setStoryLog] = useState([]);
   const [gameStarted, setGameStarted] = useState(false);
@@ -2548,8 +3176,9 @@ function FootballManager() {
   const myLeagueSorted = useMemo(() => sortLeagueTeams(teams, myTeam?.leagueKey), [teams, myTeam?.leagueKey]);
   const myRank = myLeagueSorted.findIndex((t) => t.id === MY_TEAM_ID) + 1;
   const fixtures = fixtureCalendar[week - 1] || [];
-  const compFixture = competitionFixtureForTeam(competitionState, week);
-  const myFixture = compFixture || fixtures.find((m) => m.homeId === MY_TEAM_ID || m.awayId === MY_TEAM_ID);
+  const weekUserFixtures = useMemo(() => userFixturesForWeek(competitionState, fixtureCalendar, teams, week, season).filter((f) => !fixtureAlreadyPlayed(log, f)), [competitionState, fixtureCalendar, teams, week, season, log]);
+  const compFixture = weekUserFixtures.find((m) => (m.competition || "league") !== "league") || null;
+  const myFixture = weekUserFixtures[0] || null;
   const objectives = useMemo(() => makeObjectives(myTeam, teams), [myTeam, teams]);
   const objectiveCtx = useMemo(() => ({ rank: myRank, stats: { ...seasonStats, goals: myTeam.gf } }), [myRank, seasonStats, myTeam.gf]);
 
@@ -2570,19 +3199,31 @@ function FootballManager() {
   }, []);
 
   const currentSavePayload = useCallback(() => ({
-    competition, teams, week, season, fixtureCalendar, competitionState, seasonHistory, cash, formation, trainingPlan, facilities, seasonStats, claimed, market, log, manager, storyLog, worldNews, lineupOverrides, helpMode, aiDifficulty, selectedClubId, selectedCoachKey,
-  }), [aiDifficulty, cash, claimed, competition, facilities, formation, helpMode, lineupOverrides, log, manager, market, seasonStats, storyLog, worldNews, teams, trainingPlan, week, selectedClubId, selectedCoachKey]);
+    competition, teams, week, season, fixtureCalendar, competitionState, seasonHistory, cash, formation, trainingPlan, facilities, seasonStats, claimed, market, log, manager, storyLog, worldNews, lineupOverrides, scoutQueue, pendingTransfers, transferActionWeek, helpMode, aiDifficulty, selectedClubId, selectedCoachKey,
+  }), [aiDifficulty, cash, claimed, competition, facilities, formation, helpMode, lineupOverrides, log, manager, market, pendingTransfers, scoutQueue, seasonStats, storyLog, transferActionWeek, worldNews, teams, trainingPlan, week, selectedClubId, selectedCoachKey]);
+
+  useEffect(() => {
+    if (!gameStarted || !myTeam) return;
+    if (academyPlayers(myTeam).length > 0) return;
+    setTeams((prev) => ensureUserAcademyInTeams(prev, season, facilities.academy || 1, 6));
+    setWorldNews((prev) => [{ id: `academy-auto-${Date.now()}`, week, tag: "Youth Intake", icon: "🌱", title: "Akademi membuka intake baru", body: "Sistem menambahkan pemain akademi otomatis agar menu Youth punya tombol Panggil ke Skuad Utama, Cek Potensi, Loan, dan Jual." }, ...prev].slice(0, 80));
+    notify("Akademi kamu belum punya pemain. Sistem menambahkan 6 youth academy agar tombol Panggil ke Skuad Utama muncul.", "success");
+  }, [facilities.academy, gameStarted, myTeam, notify, season, week]);
 
   const applyLoadedData = useCallback((data, source = "save") => {
     if (!data?.teams || !Array.isArray(data.teams)) { notify("File save tidak valid.", "error"); return; }
     setCompetition("managerWorld");
-    setTeams(data.teams); setWeek(data.week || 1); setSeason(data.season || 1); setFixtureCalendar(data.fixtureCalendar || buildLeagueFixtures(data.teams, data.season || 1)); setCompetitionState(data.competitionState || initialCompetitionState(data.season || 1)); setSeasonHistory(data.seasonHistory || []); setCash(Number(data.cash ?? INITIAL_CASH)); setFormation(data.formation || "4-3-3");
-    setTrainingPlan(data.trainingPlan || "balanced"); setFacilities(data.facilities || { stadium: 1, training: 1, academy: 1, medical: 1, merchandise: 1, sponsor: 1 });
+    const loadedFacilities = data.facilities || { stadium: 1, training: 1, academy: 1, medical: 1, merchandise: 1, sponsor: 1 };
+    const loadedSeason = data.season || 1;
+    const migratedTeams = ensureUserAcademyInTeams(data.teams, loadedSeason, loadedFacilities.academy || 1, 6);
+    const hadNoAcademy = !academyPlayers((data.teams || []).find((t) => t.id === MY_TEAM_ID)).length;
+    setTeams(migratedTeams); setWeek(data.week || 1); setSeason(loadedSeason); setFixtureCalendar(data.fixtureCalendar || buildLeagueFixtures(migratedTeams, loadedSeason)); setCompetitionState(data.competitionState || initialCompetitionState(loadedSeason)); setSeasonHistory(data.seasonHistory || []); setCash(Number(data.cash ?? INITIAL_CASH)); setFormation(data.formation || "4-3-3");
+    setTrainingPlan(data.trainingPlan || "balanced"); setFacilities(loadedFacilities);
     setSeasonStats(data.seasonStats || { homeWins: 0, derbyWins: 0, goals: 0, youthDeveloped: 0 }); setClaimed(data.claimed || []);
-    setMarket(data.market || makeTransferMarket(data.teams, data.facilities?.academy || 1)); setLog(data.log || []); setManager(data.manager || { name: "Coach Arjuna", reputation: 1, boardTrust: 70, fanTrust: 70 });
-    setStoryLog(data.storyLog || []); setWorldNews(data.worldNews || []); setLineupOverrides(data.lineupOverrides || {}); setHelpMode(Boolean(data.helpMode)); setAiDifficulty(data.aiDifficulty || "Normal");
-    setSelectedClubId(data.selectedClubId || MY_TEAM_ID); setSelectedCoachKey(data.selectedCoachKey || "balanced");
-    setScoutQueue([]); setScoutUsed(0); setActive(null); setSelectedId(null); setSelectedPlayer(null); setGameStarted(true); setTab("dashboard");
+    setMarket(data.market ? cleanMarket(data.market, migratedTeams) : makeTransferMarket(migratedTeams, loadedFacilities.academy || 1)); setLog(data.log || []); setManager(data.manager || { name: "Coach Arjuna", reputation: 1, boardTrust: 70, fanTrust: 70 });
+    setStoryLog(data.storyLog || []); setWorldNews(hadNoAcademy ? [{ id: `academy-migration-${Date.now()}`, week: data.week || 1, tag: "Youth Intake", icon: "🌱", title: "Akademi membuka intake baru", body: "Save lama tidak punya pemain akademi. Sistem baru otomatis menambahkan youth academy agar tombol Panggil ke Skuad Utama muncul." }, ...(data.worldNews || [])].slice(0, 80) : (data.worldNews || [])); setLineupOverrides(data.lineupOverrides || {}); setHelpMode(Boolean(data.helpMode)); setAiDifficulty(data.aiDifficulty || "Normal");
+    setSelectedClubId(data.selectedClubId || MY_TEAM_ID); setSelectedCoachKey(data.selectedCoachKey || "balanced"); setPendingTransfers(data.pendingTransfers || []); setTransferActionWeek(data.transferActionWeek || null);
+    setScoutQueue(data.scoutQueue || []); setScoutUsed(0); setActive(null); setPreMatch(null); setSelectedId(null); setSelectedPlayer(null); setGameStarted(true); setTab("dashboard");
     notify(source === "file" ? "Save file berhasil dimuat." : "Save manual berhasil dimuat.", "success");
   }, [notify]);
 
@@ -2593,7 +3234,7 @@ function FootballManager() {
     setFacilities({ stadium: 1, training: 1, academy: 1, medical: 1, merchandise: 1, sponsor: 1 });
     setSeasonStats({ homeWins: 0, derbyWins: 0, goals: 0, youthDeveloped: 0 }); setClaimed([]); setMarket(makeTransferMarket(freshTeams, 1)); setLog([]);
     setManager(managerFromPreset(selectedCoachKey)); setStoryLog([{ id: `welcome-${Date.now()}`, week: 1, title: `Media menyambut ${managerFromPreset(selectedCoachKey).name}`, choices: ["Jawab tenang", "Janji sepak bola menyerang", "Fokus ke perkembangan skuad"] }]); setWorldNews([{ id: `world-${Date.now()}`, week: 1, tag: "World Start", icon: "🌍", title: "Semua klub mulai fair", body: "Rata-rata skuad dibuat sekitar 70. AI club growth akan membuat klub lain latihan, transfer, ubah taktik, dan menemukan hidden talent setiap pekan." }]); setLineupOverrides({});
-    setScoutQueue([]); setScoutUsed(0); setActive(null); setSelectedId(null); setSelectedPlayer(null); setTab("dashboard"); setGameStarted(true);
+    setScoutQueue([]); setScoutUsed(0); setPendingTransfers([]); setTransferActionWeek(null); setActive(null); setPreMatch(null); setSelectedId(null); setSelectedPlayer(null); setTab("dashboard"); setGameStarted(true);
     const chosen = freshTeams.find((t) => t.id === MY_TEAM_ID);
     notify(`Career baru: ${chosen?.name || "Klub"}, coach ${managerFromPreset(selectedCoachKey).name}. Mode bantuan ${helpMode ? "aktif" : "mati"}, AI ${aiDifficulty}.`, "success");
   }, [aiDifficulty, competition, helpMode, notify, selectedClubId, selectedCoachKey]);
@@ -2661,8 +3302,23 @@ function FootballManager() {
     compState = updateNumberOneState(compState, teamsAfterResults, week, compResults, season);
     const growth = simulateAIClubGrowth(teamsAfterResults, week, allResults);
     let nextTeams = growth.teams;
+    const returns = processLoanReturns(nextTeams, week);
+    nextTeams = returns.teams;
+    const pendingSquad = processPendingUserSquadActions(nextTeams, week + 1, { cash, manager, facilities });
+    nextTeams = pendingSquad.teams;
+    if (pendingSquad.cashDelta) setCash((c) => c + pendingSquad.cashDelta);
+    const dev = processWeeklyDevelopmentForUserTeam(nextTeams, week, trainingPlan, facilities);
+    nextTeams = dev.teams;
+    const offers = processUserTransferOffers(nextTeams, week);
+    nextTeams = offers.teams;
+    const academyRefresh = processYouthAcademyRefresh(nextTeams, week, season, facilities.academy || 1);
+    nextTeams = academyRefresh.teams;
+    const incoming = processIncomingUserTransfers(nextTeams, pendingTransfers, week + 1);
+    nextTeams = incoming.teams;
+    setPendingTransfers(incoming.remaining);
+    if (dev.youthDeveloped) setSeasonStats((ss) => ({ ...ss, youthDeveloped: ss.youthDeveloped + dev.youthDeveloped }));
     let nextWeek = week + 1;
-    let extraNews = [broadRandomNews(nextTeams, week, season)];
+    let extraNews = [broadRandomNews(nextTeams, week, season), ...returns.news, ...incoming.news, ...pendingSquad.news, ...dev.news, ...offers.news, ...academyRefresh.news];
     let nextSeason = season;
     let nextFixtures = fixtureCalendar;
     let seasonRecords = [];
@@ -2675,6 +3331,7 @@ function FootballManager() {
       compState = initialCompetitionState(nextSeason);
       seasonRecords = rollover.history;
       extraNews = [...rollover.news, ...extraNews];
+      if (rollover.freeAgents?.length) setMarket((prev) => cleanMarket([...(rollover.freeAgents || []), ...prev], nextTeams));
       setSeasonStats({ homeWins: 0, derbyWins: 0, goals: 0, youthDeveloped: 0 });
     }
     setTeams(nextTeams);
@@ -2685,32 +3342,56 @@ function FootballManager() {
     setLog((prev) => [...allResults, ...prev].slice(0, 720));
     setWorldNews((prev) => [...growth.news, ...extraNews, ...prev].slice(0, 180));
     setSeasonHistory((prev) => [...seasonRecords, ...prev].slice(0, 90));
-    setMarket((prev) => cleanMarket([...(growth.marketAdds || []), ...prev], nextTeams));
+    const idleScoutDone = scoutQueue.filter((q) => (q.dueWeek || week + 1) <= week + 1);
+    const idleScoutLeft = scoutQueue.filter((q) => (q.dueWeek || week + 1) > week + 1);
+    setMarket((prev) => {
+      const normalDoneIds = idleScoutDone.filter((q) => !q.player).map((q) => q.id);
+      const randomReports = idleScoutDone.filter((q) => q.player).map((q) => ({ ...q.player, scouted: true, scoutStatus: q.player.rarePotential ? "gem" : "normal", scoutDueWeek: null, scoutReportWeek: week + 1, randomScout: true, sourceClub: "Scout Network" }));
+      const updated = normalDoneIds.length ? prev.map((p) => normalDoneIds.includes(p.id) ? { ...p, scouted: true, scoutStatus: p.rarePotential ? "gem" : "normal", scoutDueWeek: null } : p) : prev;
+      return cleanMarket([...(returns.marketAdds || []), ...(pendingSquad.marketAdds || []), ...(growth.marketAdds || []), ...randomReports, ...updated], nextTeams);
+    });
+    if (idleScoutDone.length) {
+      const reportNames = idleScoutDone.map((q) => q.player?.name || q.name).filter(Boolean).join(", ");
+      setWorldNews((prev) => [{ id: `scout-report-${Date.now()}`, week: week + 1, season, tag: "Scout Report", icon: "🔎", title: `Scout menemukan ${idleScoutDone.length} laporan pemain`, body: reportNames ? `${reportNames} sudah masuk menu Transfer. Buka detail report untuk lihat stat, rating, harga, loan/kontrak sementara, beli, atau tolak.` : "Report scout sudah selesai dan bisa dibuka di Transfer." }, ...prev].slice(0, 180));
+      notify(`Scout report selesai untuk ${idleScoutDone.length} pemain. Cek Inbox/Transfer.`, "info");
+    }
+    setScoutQueue(idleScoutLeft);
     setScoutUsed(0);
     notify(nextWeek === 1 ? `Season ${nextSeason} dimulai. Promosi, degradasi, kontrak, aging, youth intake, dan fixture baru sudah diproses.` : `Pekan ${week} dilewati: event, AI growth, berita, dan kompetisi diproses.`, "info");
-  }, [active, competitionState, fixtureCalendar, gameStarted, notify, season, teams, week]);
+  }, [active, cash, competitionState, facilities, fixtureCalendar, gameStarted, manager, notify, pendingTransfers, scoutQueue, season, teams, trainingPlan, week]);
 
   const startMatch = useCallback(() => {
     if (!gameStarted) { setTab("dashboard"); return; }
     if (active) { setTab("match"); return; }
+    if (preMatch) { setTab("match"); return; }
     let compState = ensureNumberOneState(competitionState, teams, week, season);
     if (JSON.stringify(compState.numberOne) !== JSON.stringify(competitionState.numberOne)) setCompetitionState(compState);
-    const comp = competitionFixtureForTeam(compState, week);
-    const leagueFix = (fixtureCalendar[week - 1] || []).find((m) => m.homeId === MY_TEAM_ID || m.awayId === MY_TEAM_ID);
-    const fixture = comp || leagueFix;
+    const fixture = userFixturesForWeek(compState, fixtureCalendar, teams, week, season).find((f) => !fixtureAlreadyPlayed(log, f));
     if (week > SEASON_LENGTH_WEEKS) { advanceIdleWeek(); return; }
     if (!fixture) { advanceIdleWeek(); return; }
-    const homeTeam = teams.find((t) => t.id === fixture.homeId);
-    const awayTeam = teams.find((t) => t.id === fixture.awayId);
+    const homeTeam = teamForFixture(teams, fixture.homeId, season, fixture.stage);
+    const awayTeam = teamForFixture(teams, fixture.awayId, season, fixture.stage);
     const userSide = fixture.homeId === MY_TEAM_ID ? "home" : "away";
+    setPreMatch({ week, season, fixture, homeTeam, awayTeam, userSide, createdAt: Date.now() });
+    setTab("match");
+    notify(`Pre-match siap: ${homeTeam.name} vs ${awayTeam.name}. Atur formasi, cek lawan, lalu tekan Mulai Main.`, "success");
+  }, [active, preMatch, advanceIdleWeek, competitionState, fixtureCalendar, gameStarted, log, notify, season, teams, week]);
+
+  const beginPreparedMatch = useCallback(() => {
+    if (!preMatch) { startMatch(); return; }
+    const { fixture, userSide } = preMatch;
+    const homeTeam = teamForFixture(teams, fixture.homeId, season, fixture.stage);
+    const awayTeam = teamForFixture(teams, fixture.awayId, season, fixture.stage);
     const game = createMatch({ homeTeam, awayTeam, userSide, userFormation: formation, trainingPlan, facilities, lineupOverrides, aiDifficulty, helpMode });
     Object.assign(game, { competition: fixture.competition || "league", leagueKey: fixture.leagueKey, cupName: fixture.cupName, stage: fixture.stage, group: fixture.group, matchKey: fixture.key });
-    if (fixture.competition === "numberOne") game.history = [{ minute: 1, icon: "👑", text: `${fixture.cupName} ${fixture.stage}: laga bergengsi NO.1 dimulai.` }, ...(game.history || [])];
-    setActive({ week, fixture, game });
+    if (fixture.competition === "numberOne") game.history = [{ minute: 1, icon: "👑", text: `${fixture.cupName} ${fixture.stage}: laga bergengsi NO.1 dimulai dari penyerang.` }, ...(game.history || [])];
+    if (fixture.competition && fixture.competition !== "league" && fixture.competition !== "numberOne") game.history = [{ minute: 1, icon: fixture.icon || "🏆", text: `${fixture.cupName} ${fixture.stage}: ${fixture.note || "laga kompetisi bergengsi"}` }, ...(game.history || [])];
+    setActive({ week: preMatch.week, fixture, game });
+    setPreMatch(null);
     setSelectedId(game.ballOwnerId && getPiece(game, game.ballOwnerId)?.side === userSide ? game.ballOwnerId : null);
     setTab("match");
-    notify(`${fixture.cupName || leagueName(fixture.leagueKey) || "Liga"}: ${homeTeam.name} vs ${awayTeam.name}. Value laga berbeda sesuai kompetisi.`, game.isDerby ? "derby" : "success");
-  }, [active, advanceIdleWeek, aiDifficulty, competitionState, facilities, fixtureCalendar, formation, gameStarted, helpMode, lineupOverrides, notify, season, teams, trainingPlan, week]);
+    notify(`${fixture.cupName || leagueName(fixture.leagueKey) || "Liga"}: ${homeTeam.name} vs ${awayTeam.name}. Kick-off dari penyerang; posisi tetap aman di area sendiri.`, game.isDerby ? "derby" : "success");
+  }, [aiDifficulty, facilities, formation, helpMode, lineupOverrides, notify, preMatch, season, startMatch, teams, trainingPlan]);
 
   useEffect(() => {
     if (aiPaused || !active?.game || active.game.ended || active.game.goalPause || active.game.turn === active.game.userSide) return undefined;
@@ -2778,27 +3459,82 @@ function FootballManager() {
   const finishWeek = useCallback(() => {
     if (!active?.game?.ended) { notify("Pertandingan belum selesai.", "warn"); return; }
     const played = resultFromGame(active.game, active.week);
+    let compState = ensureNumberOneState(competitionState, teams, active.week, season);
+
+    // Jika dalam 1 pekan ada lebih dari 1 laga user, jangan langsung lompat pekan.
+    // Match lain dijadwalkan beda hari, sementara efek mingguan (training, youth, kontrak, loan, offer) baru diproses setelah laga terakhir pekan itu selesai.
+    const teamsAfterSinglePlayed = applyResult(teams, played);
+    compState = updateNumberOneState(compState, teamsAfterSinglePlayed, active.week, played.competition === "numberOne" ? [played] : [], season);
+    const remainingThisWeek = remainingUserFixturesAfter(compState, fixtureCalendar, teamsAfterSinglePlayed, active.week, season, log, played);
+    if (remainingThisWeek.length) {
+      const userWonSingle = (played.homeId === MY_TEAM_ID && played.homeGoals > played.awayGoals) || (played.awayId === MY_TEAM_ID && played.awayGoals > played.homeGoals);
+      const singleCupMark = userWonSingle && trophyMarkForResult(played);
+      let singleTeams = teamsAfterSinglePlayed;
+      if (singleCupMark) {
+        singleTeams = singleTeams.map((t) => t.id === MY_TEAM_ID ? { ...t, reputationBadge: singleCupMark, trophies: [{ season, name: played.cupName || played.competition, mark: singleCupMark }, ...(t.trophies || [])].slice(0, 14), fans: Math.round((t.fans || 0) * (1 + competitionPrestigeImpact(played, true) / 100)) } : t);
+      }
+      const singleIncome = (played.homeId === MY_TEAM_ID ? Math.round(homeIncome(myTeam, played, myRank, facilities) * matchIncomeMultiplier(played.competition || "league")) : 0) + cupBonusForWeek(active.week, myTeam, played) + competitionPrizeForResult(played, MY_TEAM_ID);
+      if (singleIncome) setCash((c) => c + singleIncome);
+      setSeasonStats((s) => ({
+        ...s,
+        homeWins: s.homeWins + (played.homeId === MY_TEAM_ID && played.homeGoals > played.awayGoals ? 1 : 0),
+        derbyWins: s.derbyWins + (played.derby && userWonSingle ? 1 : 0),
+        goals: s.goals + (played.homeId === MY_TEAM_ID ? played.homeGoals : played.awayGoals),
+      }));
+      setLog((prev) => [played, ...prev].slice(0, 720));
+      const nextFixture = remainingThisWeek[0];
+      const homeTeam = teamForFixture(singleTeams, nextFixture.homeId, season, nextFixture.stage);
+      const awayTeam = teamForFixture(singleTeams, nextFixture.awayId, season, nextFixture.stage);
+      const userSide = nextFixture.homeId === MY_TEAM_ID ? "home" : "away";
+      setTeams(singleTeams);
+      setCompetitionState(compState);
+      setWorldNews((prev) => [{ id: `multi-match-${season}-${active.week}-${played.matchKey || Date.now()}`, week: active.week, season, tag: "Matchday Padat", icon: "📅", title: `${played.cupName || leagueName(played.leagueKey)} selesai, masih ada laga pekan ini`, body: `Pekan ${active.week} punya ${remainingThisWeek.length} laga tersisa. Jadwal dibuat beda hari supaya tidak berdekatan.` }, ...prev].slice(0, 180));
+      setPreMatch({ week: active.week, season, fixture: nextFixture, homeTeam, awayTeam, userSide, createdAt: Date.now() });
+      setActive(null);
+      setSelectedId(null);
+      setTab("match");
+      notify(`Laga pertama pekan ${active.week} selesai. Masih ada ${remainingThisWeek.length} pertandingan minggu ini, jaraknya beda hari. Atur formasi lagi lalu Mulai Main.`, "success");
+      return;
+    }
+
     const leagueFixtures = fixtureCalendar[active.week - 1] || [];
     const leagueOther = leagueFixtures
       .filter((m) => !(m.homeId === MY_TEAM_ID || m.awayId === MY_TEAM_ID))
       .map((m) => simulateOtherMatch(teams.find((t) => t.id === m.homeId), teams.find((t) => t.id === m.awayId), active.week, m));
-    let compState = ensureNumberOneState(competitionState, teams, active.week, season);
     const compResults = simulateCompetitionFixturesForWeek(compState, teams, active.week, played.competition === "numberOne" ? played : null);
-    const results = played.competition === "league" ? [played, ...leagueOther, ...compResults] : [...leagueOther, ...compResults];
+    const results = [played, ...leagueOther, ...compResults.filter((r) => r.matchKey !== played.matchKey)];
     const teamsAfterResults = results.reduce((acc, result) => applyResult(acc, result), teams);
     compState = updateNumberOneState(compState, teamsAfterResults, active.week, results.filter((r) => r.competition === "numberOne"), season);
     let nextTeams = teamsAfterResults;
+    const userWon = (played.homeId === MY_TEAM_ID && played.homeGoals > played.awayGoals) || (played.awayId === MY_TEAM_ID && played.awayGoals > played.homeGoals);
     if (compState.numberOne?.championId) {
       nextTeams = nextTeams.map((t) => t.id === compState.numberOne.championId && !(t.trophies || []).some((tr) => tr.season === season && tr.name === "Number 1 Championship") ? { ...t, numberOneTitles: (t.numberOneTitles || 0) + 1, trophies: [{ season, name: "Number 1 Championship", mark: "NO.1" }, ...(t.trophies || [])].slice(0, 14) } : t);
     }
+    const userCupWon = userWon && trophyMarkForResult(played);
+    if (userCupWon) {
+      nextTeams = nextTeams.map((t) => t.id === MY_TEAM_ID ? { ...t, reputationBadge: userCupWon, trophies: [{ season, name: played.cupName || played.competition, mark: userCupWon }, ...(t.trophies || [])].slice(0, 14), fans: Math.round((t.fans || 0) * (1 + competitionPrestigeImpact(played, true) / 100)) } : t);
+    }
     const growth = simulateAIClubGrowth(nextTeams, active.week, results);
     nextTeams = growth.teams;
+    const returns = processLoanReturns(nextTeams, active.week);
+    nextTeams = returns.teams;
+    const pendingSquad = processPendingUserSquadActions(nextTeams, active.week + 1, { cash, manager, facilities });
+    nextTeams = pendingSquad.teams;
+    if (pendingSquad.cashDelta) setCash((c) => c + pendingSquad.cashDelta);
+    const dev = processWeeklyDevelopmentForUserTeam(nextTeams, active.week, trainingPlan, facilities);
+    nextTeams = dev.teams;
+    const offers = processUserTransferOffers(nextTeams, active.week);
+    nextTeams = offers.teams;
+    const academyRefresh = processYouthAcademyRefresh(nextTeams, active.week, season, facilities.academy || 1);
+    nextTeams = academyRefresh.teams;
+    const incoming = processIncomingUserTransfers(nextTeams, pendingTransfers, active.week + 1);
+    nextTeams = incoming.teams;
+    setPendingTransfers(incoming.remaining);
     setLog((prev) => [...results, ...prev].slice(0, 720));
 
-    const userWon = (played.homeId === MY_TEAM_ID && played.homeGoals > played.awayGoals) || (played.awayId === MY_TEAM_ID && played.awayGoals > played.homeGoals);
     const userHomeWin = played.homeId === MY_TEAM_ID && played.homeGoals > played.awayGoals;
     const userDerbyWin = played.derby && userWon;
-    const youngGrowth = trainingPlan === "youth" ? (rng(0, 2) + facilities.academy >= 3 ? 1 : 0) : 0;
+    const youngGrowth = dev.youthDeveloped + (trainingPlan === "youth" ? (rng(0, 2) + facilities.academy >= 3 ? 1 : 0) : 0);
     setSeasonStats((s) => ({ ...s, homeWins: s.homeWins + (userHomeWin ? 1 : 0), derbyWins: s.derbyWins + (userDerbyWin ? 1 : 0), goals: s.goals + (played.homeId === MY_TEAM_ID ? played.homeGoals : played.awayGoals), youthDeveloped: s.youthDeveloped + youngGrowth }));
 
     const cupBonus = cupBonusForWeek(active.week, myTeam, played) + competitionPrizeForResult(played, MY_TEAM_ID);
@@ -2808,22 +3544,32 @@ function FootballManager() {
     notify(`${played.cupName || leagueName(played.leagueKey) || "Match"} selesai. Value laga: ${money(income)}${played.competition === "numberOne" ? " · NO.1 Championship memberi spotlight besar" : ""}.`, userWon ? "success" : "info");
 
     setScoutUsed(0);
-    const worldExtra = [];
+    const worldExtra = [...returns.news, ...incoming.news, ...pendingSquad.news, ...dev.news, ...offers.news, ...academyRefresh.news];
     if (active.week % 2 === 0 || roll(35)) worldExtra.push(broadRandomNews(nextTeams, active.week, season));
     if (compState.numberOne?.championId && active.week === NUMBER_ONE_WEEKS.final) worldExtra.push({ id: `no1-news-${season}`, week: active.week, season, tag: "NO.1", icon: "👑", title: `${compState.numberOne.championName} memenangkan Number 1 Championship`, body: "Juara masuk berita besar dan mendapat tanda NO.1 di profil klub." });
+    if (userCupWon) worldExtra.push({ id: `cup-news-${season}-${active.week}-${userCupWon}`, week: active.week, season, tag: userCupWon, icon: played.competition === "worldCupChampionship" ? "🏆🌍" : "🏆", title: `${myTeam.name} mengangkat ${played.cupName}`, body: `Gelar ${played.cupName} memberi tanda ${userCupWon}, reputasi naik, fans bertambah, dan gengsi klub meningkat.` });
     setWorldNews((prev) => [...growth.news, ...worldExtra, ...prev].slice(0, 180));
 
+    const scoutDone = scoutQueue.filter((q) => (q.dueWeek || active.week + 1) <= active.week + 1);
+    const scoutLeft = scoutQueue.filter((q) => (q.dueWeek || active.week + 1) > active.week + 1);
     setMarket((prev) => {
       let updated = prev;
-      if (scoutQueue.length) {
-        const doneIds = scoutQueue.map((q) => q.id);
-        updated = updated.map((p) => doneIds.includes(p.id) ? { ...p, scouted: true, scoutStatus: p.rarePotential ? "gem" : "normal" } : p);
+      const normalDoneIds = scoutDone.filter((q) => !q.player).map((q) => q.id);
+      const randomReports = scoutDone.filter((q) => q.player).map((q) => ({ ...q.player, scouted: true, scoutStatus: q.player.rarePotential ? "gem" : "normal", scoutDueWeek: null, scoutReportWeek: active.week + 1, randomScout: true, sourceClub: "Scout Network" }));
+      if (normalDoneIds.length) {
+        updated = updated.map((p) => normalDoneIds.includes(p.id) ? { ...p, scouted: true, scoutStatus: p.rarePotential ? "gem" : "normal", scoutDueWeek: null } : p);
       }
-      return cleanMarket([...(growth.marketAdds || []), ...updated], nextTeams).sort((a, b) => b.overall - a.overall || b.value - a.value).slice(0, 180);
+      return cleanMarket([...(returns.marketAdds || []), ...(pendingSquad.marketAdds || []), ...(growth.marketAdds || []), ...randomReports, ...updated], nextTeams).sort((a, b) => b.overall - a.overall || b.value - a.value).slice(0, 180);
     });
-    if (scoutQueue.length) { setScoutQueue([]); notify(`Scout report selesai untuk ${scoutQueue.length} pemain. 85+ tetap langka.`, "info"); }
-    if (active.week % 3 === 0 || played.derby || played.competition === "numberOne") setStoryLog((prev) => [randomStoryEvent(active.week), ...prev].slice(0, 20));
-    setManager((m) => ({ ...m, reputation: clamp(m.reputation + (userWon ? 1 : 0) + (played.competition === "numberOne" && userWon ? 2 : 0), 1, 99), boardTrust: clamp(m.boardTrust + (userWon ? 3 : -2), 0, 100), fanTrust: clamp(m.fanTrust + (userWon ? 4 : -3) + (played.derby && userWon ? 4 : 0), 0, 100) }));
+    if (scoutDone.length) {
+      const reportNames = scoutDone.map((q) => q.player?.name || q.name).filter(Boolean).join(", ");
+      setWorldNews((prev) => [{ id: `scout-report-${Date.now()}`, week: active.week + 1, season, tag: "Scout Report", icon: "🔎", title: `Scout menemukan ${scoutDone.length} laporan pemain`, body: reportNames ? `${reportNames} sudah masuk menu Transfer. Buka detail report untuk lihat stat, rating, harga, loan/kontrak sementara, beli, atau tolak.` : "Report scout sudah selesai dan bisa dibuka di Transfer." }, ...prev].slice(0, 180));
+      notify(`Scout report selesai untuk ${scoutDone.length} pemain. Cek Inbox/Transfer.`, "info");
+    }
+    setScoutQueue(scoutLeft);
+    if (active.week % 3 === 0 || played.derby || played.competition === "numberOne") setStoryLog((prev) => [randomStoryEvent(active.week, nextTeams, nextTeams.find((t) => t.id === MY_TEAM_ID), manager), ...prev].slice(0, 20));
+    const prestigeImpact = competitionPrestigeImpact(played, userWon);
+    setManager((m) => ({ ...m, reputation: clamp(m.reputation + (userWon ? 1 : 0) + prestigeImpact, 1, 99), boardTrust: clamp(m.boardTrust + (userWon ? 3 : -2) + Math.floor(prestigeImpact / 2), 0, 100), fanTrust: clamp(m.fanTrust + (userWon ? 4 : -3) + (played.derby && userWon ? 4 : 0) + prestigeImpact, 0, 100) }));
 
     let nextWeek = active.week + 1;
     let nextSeason = season;
@@ -2838,6 +3584,7 @@ function FootballManager() {
       compState = initialCompetitionState(nextSeason);
       seasonRecords = rollover.history;
       setSeasonStats({ homeWins: 0, derbyWins: 0, goals: 0, youthDeveloped: 0 });
+      if (rollover.freeAgents?.length) setMarket((prev) => cleanMarket([...(rollover.freeAgents || []), ...prev], nextTeams));
       setWorldNews((prev) => [...rollover.news, ...prev].slice(0, 180));
       notify(`Season ${season} selesai. Promosi/degradasi, kontrak, aging, pensiun, youth intake, hadiah, dan fixture season ${nextSeason} aktif.`, "success");
     }
@@ -2847,59 +3594,171 @@ function FootballManager() {
     setSeason(nextSeason);
     setSeasonHistory((prev) => [...seasonRecords, ...prev].slice(0, 90));
     setActive(null);
+    setPreMatch(null);
     setSelectedId(null);
     setWeek(nextWeek);
     setTab(nextWeek === 1 ? "career" : "schedule");
-  }, [active, competitionState, facilities, fixtureCalendar, myRank, myTeam, notify, scoutQueue, season, teams, trainingPlan]);
+  }, [active, cash, competitionState, facilities, fixtureCalendar, log, manager, myRank, myTeam, notify, pendingTransfers, scoutQueue, season, teams, trainingPlan]);
 
   useEffect(() => {
     // Board vision tidak lagi auto-menyelesaikan objective atau memberi bonus saat awal/selama career.
     // Progress tetap ditampilkan sebagai arah musim, bukan tombol/reward otomatis.
   }, [objectiveCtx]);
 
+  const transferRejectionReason = (player) => {
+    const reasons = ["klub tujuan dinilai kurang ambisius", "pemain ingin klub dengan fasilitas lebih baik", "agen meminta proyek jangka panjang", "klub pemilik belum mau melepas", "pemain menunggu tawaran dari klub yang lebih besar"];
+    if ((manager.fanTrust || 70) < 45) return "fans trust rendah membuat pemain ragu";
+    if ((myRank || 99) > 12 && (player.overall || 70) >= 80) return "posisi liga kurang menarik untuk pemain bintang";
+    return pick(reasons);
+  };
   const buy = (player) => {
+    if (player.userListed || player.ownerTeamId === MY_TEAM_ID) { notify("Itu pemain klub kamu. Gunakan aksi di menu Skuad untuk offer masuk.", "warn"); return; }
     if (!isTransferWindow(week)) { notify(`Bursa tutup. ${transferWindowLabel(week)}. Beli/jual hanya di pekan transfer window.`, "warn"); return; }
-    if (cash < player.value) { notify(`Kas tidak cukup. Butuh ${money(player.value)}.`, "error"); return; }
-    if (myTeam.players.length >= 38) { notify("Skuad penuh. Maksimal 38 pemain.", "warn"); return; }
-    setCash((c) => c - player.value);
+    if (transferActionWeek === week) { notify("Transfer masuk dibatasi 1x per pekan. Tunggu pekan berikutnya untuk beli/pinjam lagi.", "warn"); return; }
+    const fee = player.ownerTeamId ? Math.round((player.value || 0) * 1.04) : player.value;
+    if (cash < fee) { notify(`Kas tidak cukup. Butuh ${money(fee)}.`, "error"); return; }
+    if (seniorPlayers(myTeam).length + pendingTransfers.length >= 38) { notify("Skuad senior penuh/menunggu kedatangan. Maksimal 38 pemain senior.", "warn"); return; }
+    if (player.ownerTeamId && roll((player.overall || 70) >= 85 ? 52 : 25)) { notify(`${player.name} menolak/tidak dilepas: ${transferRejectionReason(player)}.`, "warn"); return; }
+    const arrival = { id: `buy-${player.id}-${week}-${Date.now()}`, type: "buy", dueWeek: week + 1, createdWeek: week, fee, sourceClub: player.sourceClub || "Market", ownerTeamId: player.ownerTeamId || null, player: { ...player, pendingArrival: { type: "buy", dueWeek: week + 1 } } };
+    setCash((c) => c - fee);
+    setPendingTransfers((prev) => [...prev, arrival]);
+    setTransferActionWeek(week);
     setTeams((prev) => prev.map((t) => {
-      if (t.id === MY_TEAM_ID) return { ...t, players: [...t.players, { ...player, teamId: MY_TEAM_ID, ownerTeamId: null, sourceClub: myTeam.name, scouted: true }] };
-      if (player.ownerTeamId && t.id === player.ownerTeamId) return { ...t, budget: (t.budget || INITIAL_CASH) + player.value, players: t.players.filter((p) => p.id !== player.id) };
+      if (player.ownerTeamId && t.id === player.ownerTeamId) return { ...t, budget: (t.budget || INITIAL_CASH) + fee, players: t.players.filter((p) => p.id !== player.id) };
       return t;
     }));
     setMarket((prev) => prev.filter((p) => p.id !== player.id));
-    notify(`${player.name} bergabung permanen dari ${player.sourceClub || "market"}.`, "success");
+    setWorldNews((prev) => [{ id: `buy-pending-${player.id}-${week}`, week, season, tag: "Transfer Pending", icon: "🕒", title: `${player.name} sudah dibeli, belum bisa dimainkan`, body: `Transfer ${player.pos} OVR ${player.overall} selesai senilai ${money(fee)}, tetapi registrasi skuad baru aktif pekan ${week + 1}.` }, ...prev].slice(0, 180));
+    notify(`${player.name} dibeli senilai ${money(fee)}. Ia baru masuk skuad utama pekan ${week + 1}.`, "success");
   };
-  const loan = (player) => {
+  const loan = (player, weeksCount = 15) => {
+    if (player.userListed || player.ownerTeamId === MY_TEAM_ID) { notify("Pemain itu milik klub kamu. Tunggu offer dari klub lain untuk loan/jual.", "warn"); return; }
     if (!isTransferWindow(week)) { notify(`Bursa tutup. ${transferWindowLabel(week)}. Loan hanya di transfer window.`, "warn"); return; }
-    const fee = Math.round(player.value * 0.14);
+    if (transferActionWeek === week) { notify("Transfer masuk dibatasi 1x per pekan. Tunggu pekan berikutnya untuk beli/pinjam lagi.", "warn"); return; }
+    const weeksLoan = Number(weeksCount) || 15;
+    const factor = weeksLoan <= 3 ? 0.06 : weeksLoan <= 15 ? 0.14 : 0.24;
+    const fee = Math.round((player.value || 0) * factor / 500) * 500;
     if (cash < fee) { notify(`Loan fee kurang. Butuh ${money(fee)}.`, "error"); return; }
+    if (seniorPlayers(myTeam).length + pendingTransfers.length >= 38) { notify("Skuad senior penuh/menunggu kedatangan. Maksimal 38 pemain senior.", "warn"); return; }
+    if (player.ownerTeamId && roll((player.overall || 70) >= 82 ? 44 : 18)) { notify(`${player.name} menolak loan: ${transferRejectionReason(player)}.`, "warn"); return; }
+    const arrival = { id: `loan-${player.id}-${week}-${Date.now()}`, type: "loan", dueWeek: week + 1, createdWeek: week, fee, weeks: weeksLoan, loanReturnWeek: week + 1 + weeksLoan, sourceClub: player.sourceClub || "Free Agent", ownerTeamId: player.ownerTeamId || null, player: { ...player, value: Math.round((player.value || 0) * 0.3), pendingArrival: { type: "loan", dueWeek: week + 1 } } };
     setCash((c) => c - fee);
-    setTeams((prev) => prev.map((t) => t.id === MY_TEAM_ID ? { ...t, players: [...t.players, { ...player, teamId: MY_TEAM_ID, loan: true, value: Math.round(player.value * 0.3), scouted: true }] } : t));
+    setPendingTransfers((prev) => [...prev, arrival]);
+    setTransferActionWeek(week);
+    setTeams((prev) => prev.map((t) => {
+      if (player.ownerTeamId && t.id === player.ownerTeamId) return { ...t, players: t.players.filter((p) => p.id !== player.id) };
+      return t;
+    }));
     setMarket((prev) => prev.filter((p) => p.id !== player.id));
-    notify(`${player.name} datang sebagai pinjaman.`, "success");
+    setWorldNews((prev) => [{ id: `loan-pending-${player.id}-${week}`, week, season, tag: "Loan Pending", icon: "🤝", title: `${player.name} sepakat loan, menunggu registrasi`, body: `Loan ${weeksLoan} pekan disetujui dengan fee ${money(fee)}. Pemain baru bisa dipakai mulai pekan ${week + 1}.` }, ...prev].slice(0, 180));
+    notify(`${player.name} setuju loan ${weeksLoan} pekan. Ia baru masuk skuad utama pekan ${week + 1}.`, "success");
   };
   const scout = (player) => {
     if (player.scouted) { notify(`${player.name} sudah punya report.`, "info"); return; }
-    if (scoutQueue.some((q) => q.id === player.id)) { notify(`${player.name} sedang di-scout. Tunggu 1 match.`, "warn"); return; }
+    if (scoutQueue.length) { notify("Scout masih berjalan. Tunggu report selesai sebelum scout lain.", "warn"); return; }
+    if (scoutQueue.some((q) => q.id === player.id)) { notify(`${player.name} sedang di-scout. Tunggu sampai report selesai.`, "warn"); return; }
     if (scoutUsed >= scoutLimit) { notify(`Batas scout fase ini ${scoutLimit}. Tunggu pertandingan berikutnya.`, "warn"); return; }
+    const dueWeek = week + rng(1, 7);
     setScoutUsed((n) => n + 1);
-    setScoutQueue((q) => [...q, { id: player.id, name: player.name, dueWeek: week + 1 }]);
-    setMarket((prev) => prev.map((p) => p.id === player.id ? { ...p, scoutStatus: "pending" } : p));
-    notify(`Scout dikirim untuk ${player.name}. Hasil keluar setelah 1 match.`, "info");
+    setScoutQueue((q) => [...q, { id: player.id, name: player.name, dueWeek }]);
+    setMarket((prev) => prev.map((p) => p.id === player.id ? { ...p, scoutStatus: "pending", scoutDueWeek: dueWeek } : p));
+    notify(`Scout dikirim untuk ${player.name}. Hasil maksimal 7 pekan, estimasi pekan ${dueWeek}.`, "info");
+  };
+  const scoutRandom = () => {
+    if (scoutQueue.length) { notify("Scout masih berjalan. Tunggu report selesai sebelum scout baru.", "warn"); return; }
+    if (scoutUsed >= scoutLimit) { notify(`Batas scout fase ini ${scoutLimit}. Tunggu pertandingan/pekan berikutnya.`, "warn"); return; }
+    const dueWeek = week + rng(1, 7);
+    const hidden = { ...genPlayer(pick(EXTRA_POSITIONS), null, rng(-8, 12), true), sourceClub: "Scout Network", ownerTeamId: null, scouted: false, scoutStatus: "hidden", scoutDueWeek: dueWeek, randomScout: true };
+    setScoutUsed((n) => Math.min(scoutLimit, n + 1));
+    setScoutQueue([{ id: `random-${hidden.id}`, hidden: true, dueWeek, player: hidden }]);
+    notify(`Scout random anonim berjalan. Nama dan data pemain baru muncul di Inbox/Transfer paling lambat pekan ${dueWeek}.`, "info");
+  };
+  const rejectScoutReport = (player) => {
+    setMarket((prev) => prev.filter((p) => p.id !== player.id));
+    notify(`Report ${player.name} ditolak dan dihapus dari daftar transfer.`, "info");
   };
   const sell = (player) => {
-    if (!isTransferWindow(week)) { notify(`Bursa tutup. ${transferWindowLabel(week)}. Jual pemain hanya di transfer window.`, "warn"); return; }
-    if (myTeam.players.length <= 18) { notify("Minimal skuad 18 pemain.", "warn"); return; }
-    const fee = Math.round(player.value * (player.loan ? 0.15 : 0.72));
-    setCash((c) => c + fee);
-    setTeams((prev) => prev.map((t) => t.id === MY_TEAM_ID ? { ...t, players: t.players.filter((p) => p.id !== player.id) } : t));
-    if (!player.loan) setMarket((prev) => cleanMarket([{ ...player, teamId: null, ownerTeamId: null, scouted: true, sourceClub: myTeam.name }, ...prev], teams));
-    setSelectedPlayer(null);
-    notify(`${player.name} dilepas. Kas +${money(fee)}.`, "success");
+    if (!isTransferWindow(week)) { notify(`Bursa tutup. ${transferWindowLabel(week)}. Tandai jual/loan hanya di transfer window.`, "warn"); return; }
+    if (!player.academy && seniorPlayers(myTeam).length <= 18) { notify("Minimal skuad utama 18 pemain senior. Tidak bisa melepas/menjual di bawah itu.", "warn"); return; }
+    setTeams((prev) => prev.map((t) => t.id === MY_TEAM_ID ? { ...t, players: t.players.map((p) => p.id === player.id ? { ...p, listedForSale: true, pendingOffer: null } : p) } : t));
+    setMarket((prev) => cleanMarket([{ ...player, userListed: true, ownerTeamId: MY_TEAM_ID, sourceClub: myTeam.name, listedForSale: true, scouted: true }, ...prev], teams));
+    notify(`${player.name} ditandai DIJUAL. Klub lain bisa memberi offer setelah pekan terlewati.`, "success");
+  };
+  const listLoan = (player) => {
+    if (!isTransferWindow(week)) { notify(`Bursa tutup. ${transferWindowLabel(week)}. Tandai loan hanya di transfer window.`, "warn"); return; }
+    setTeams((prev) => prev.map((t) => t.id === MY_TEAM_ID ? { ...t, players: t.players.map((p) => p.id === player.id ? { ...p, listedForLoan: true, pendingOffer: null } : p) } : t));
+    setMarket((prev) => cleanMarket([{ ...player, userListed: true, ownerTeamId: MY_TEAM_ID, sourceClub: myTeam.name, listedForLoan: true, scouted: true }, ...prev], teams));
+    notify(`${player.name} ditandai BISA DIPINJAM. Offer akan muncul setelah pekan terlewati.`, "success");
+  };
+  const setPendingSquadAction = (player, action) => {
+    setTeams((prev) => prev.map((t) => t.id === MY_TEAM_ID ? { ...t, players: t.players.map((p) => p.id === player.id ? { ...p, pendingSquadAction: action } : p) } : t));
+  };
+  const kickPlayer = (player) => {
+    if (!player.academy && seniorPlayers(myTeam).length <= 18) { notify("Minimal skuad utama 18 pemain senior. Kick dibatalkan agar skuad tidak kurang.", "warn"); return; }
+    if (player.pendingSquadAction) { notify("Pemain ini sudah punya aksi skuad yang menunggu pekan berikutnya.", "warn"); return; }
+    setPendingSquadAction(player, { type: "kick", dueWeek: week + 1, createdWeek: week });
+    notify(`${player.name} dijadwalkan KICK. Aksi benar-benar terjadi setelah 1 pekan terlewati.`, "warn");
+  };
+  const extendContract = (player) => {
+    if (player.pendingSquadAction) { notify("Pemain ini sudah punya aksi skuad yang menunggu pekan berikutnya.", "warn"); return; }
+    const currentWage = player.wage || 500;
+    const offerWage = Math.round(currentWage * rng(108, 145) / 100 / 100) * 100;
+    const years = rng(1, 3);
+    setPendingSquadAction(player, { type: "extend", dueWeek: week + 1, createdWeek: week, offerWage, years });
+    notify(`Offer kontrak ${player.name} dikirim: +${years} tahun, gaji ${money(offerWage)}/pekan. Jawaban datang setelah 1 pekan.`, "info");
+  };
+  const checkPotential = (player) => {
+    if (player.pendingSquadAction) { notify("Pemain ini sudah punya aksi skuad yang menunggu pekan berikutnya.", "warn"); return; }
+    const cost = 12000 + (facilities.academy || 1) * 2500;
+    setPendingSquadAction(player, { type: "checkPotential", dueWeek: week + 1, createdWeek: week, cost });
+    notify(`Cek potensi ${player.name} dijadwalkan. Hasil keluar setelah 1 pekan dan biaya ${money(cost)} dipotong saat selesai.`, "info");
+  };
+  const promoteYouth = (player) => {
+    if (!player.academy) { notify(`${player.name} sudah berada di skuad utama.`, "info"); return; }
+    if (player.pendingSquadAction) { notify("Pemain youth ini sudah punya aksi menunggu pekan berikutnya.", "warn"); return; }
+    const cap = player.rarePotential || player.potential >= 84 ? 300000 : 100000;
+    const signingFee = Math.round(clamp((player.value || 50000) * (player.rarePotential ? 0.28 : 0.16), 15000, cap) / 500) * 500;
+    if (seniorPlayers(myTeam).length >= 38) { notify("Skuad senior penuh. Maksimal 38 pemain senior sebelum promosi youth.", "warn"); return; }
+    if (cash < signingFee) { notify(`Kas tidak cukup untuk memanggil ${player.name}. Butuh ${money(signingFee)} saat proses pekan.`, "error"); return; }
+    setPendingSquadAction(player, { type: "promoteYouth", dueWeek: week + 1, createdWeek: week, signingFee });
+    notify(`${player.name} dijadwalkan PROMOSI. Masuk skuad utama setelah 1 pekan terlewati. Estimasi fee ${money(signingFee)}.`, "success");
   };
 
-  const scoutLimit = Math.min(3, 1 + Math.floor((facilities.academy || 1) / 2));
+  const respondOffer = (player, action) => {
+    const offer = player.pendingOffer;
+    if (!offer) { notify("Belum ada offer untuk pemain ini.", "warn"); return; }
+    if (action === "reject") {
+      setTeams((prev) => prev.map((t) => t.id === MY_TEAM_ID ? { ...t, players: t.players.map((p) => p.id === player.id ? { ...p, pendingOffer: null } : p) } : t));
+      notify(`Offer ${offer.clubName} untuk ${player.name} ditolak.`, "info");
+      return;
+    }
+    if (action === "counter") {
+      if (offer.countered || roll(38)) {
+        setTeams((prev) => prev.map((t) => t.id === MY_TEAM_ID ? { ...t, players: t.players.map((p) => p.id === player.id ? { ...p, pendingOffer: null } : p) } : t));
+        notify(`${offer.clubName} menolak ajukan ulang untuk ${player.name}.`, "warn");
+        return;
+      }
+      const newOffer = { ...offer, amount: Math.round(offer.amount * rng(112, 145) / 100 / 500) * 500, countered: true };
+      setTeams((prev) => prev.map((t) => t.id === MY_TEAM_ID ? { ...t, players: t.players.map((p) => p.id === player.id ? { ...p, pendingOffer: newOffer } : p) } : t));
+      notify(`${offer.clubName} menaikkan offer menjadi ${money(newOffer.amount)}.`, "success");
+      return;
+    }
+    if (offer.type === "sale" && !player.academy && seniorPlayers(myTeam).length <= 18) { notify("Tidak bisa menerima sale. Minimal skuad utama 18 pemain senior.", "warn"); return; }
+    setCash((c) => c + offer.amount);
+    setTeams((prev) => prev.map((t) => {
+      if (t.id === MY_TEAM_ID) return { ...t, players: t.players.filter((p) => p.id !== player.id) };
+      if (t.id === offer.clubId) {
+        const moved = offer.type === "loan" ? { ...player, teamId: t.id, loan: true, loanOriginId: MY_TEAM_ID, loanReturnWeek: week + (offer.weeks || 15), loanClubName: t.name, listedForSale: false, listedForLoan: false, pendingOffer: null } : { ...player, teamId: t.id, ownerTeamId: null, sourceClub: t.name, listedForSale: false, listedForLoan: false, pendingOffer: null, loan: false };
+        return { ...t, budget: Math.max(0, (t.budget || INITIAL_CASH) - offer.amount), players: [...t.players, moved].sort((a, b) => b.overall - a.overall) };
+      }
+      return t;
+    }));
+    setMarket((prev) => prev.filter((p) => p.id !== player.id));
+    setSelectedPlayer(null);
+    notify(`${offer.type === "loan" ? "Loan" : "Transfer"} ${player.name} ke ${offer.clubName} diterima. Kas +${money(offer.amount)}.`, "success");
+  };
+
+  const scoutLimit = 1;
   const saveNow = () => {
     const ok = saveCareer(currentSavePayload());
     notify(ok ? "Career disimpan manual ke browser." : "Gagal menyimpan career.", ok ? "success" : "error");
@@ -2916,9 +3775,45 @@ function FootballManager() {
     applyLoadedData(data, "local");
   };
   const resetSave = () => { clearCareer(); notify("Save manual di browser dihapus. File download tetap aman kalau kamu punya.", "warn"); };
+  const requestStoryMeeting = () => {
+    if (storyLog.some((e) => e.manualMeeting && e.week === week)) {
+      setTab("story");
+      notify("Meeting media hanya bisa dibuka 1x per pekan. Lanjutkan match/pekan dulu untuk membuka meeting baru.", "warn");
+      return;
+    }
+    const event = { ...randomStoryEvent(week, teams, myTeam, manager), manualMeeting: true, source: "manualMeeting" };
+    setStoryLog((prev) => [event, ...prev].slice(0, 28));
+    setTab("story");
+    notify("Meeting media/story baru dibuka untuk pekan ini. Pilihanmu akan masuk berita dan berdampak ke klub.", "info");
+  };
+
   const answerStory = (eventId, choice) => {
-    setStoryLog((prev) => prev.map((e) => e.id === eventId ? { ...e, choice, effect: choice.includes("Promosikan") ? "+Youth" : choice.includes("ofensif") ? "+Fans" : "+Board" } : e));
-    setManager((m) => ({ ...m, fanTrust: clamp(m.fanTrust + (choice.includes("ofensif") ? 3 : 1), 0, 100), boardTrust: clamp(m.boardTrust + (choice.includes("tenang") || choice.includes("realistis") ? 3 : 0), 0, 100) }));
+    const event = storyLog.find((e) => e.id === eventId) || {};
+    const lower = choice.toLowerCase();
+    let fans = lower.includes("ofensif") || lower.includes("rival") || lower.includes("juara") || lower.includes("derby") || lower.includes("fans") ? 5 : lower.includes("tolak") || lower.includes("salahkan") ? -2 : 1;
+    let board = lower.includes("tenang") || lower.includes("realistis") || lower.includes("fasilitas") || lower.includes("stadion") || lower.includes("waktu") ? 4 : lower.includes("serang balik") || lower.includes("salahkan") ? -3 : 1;
+    let rep = lower.includes("target juara") || lower.includes("panas") || lower.includes("deklarasi") ? 2 : lower.includes("hormati") ? 1 : 0;
+    let cashDelta = 0;
+    if (event.type === "sponsor") { cashDelta += lower.includes("ambil") ? 45000 : lower.includes("seri") ? 22000 : 0; board += lower.includes("ambil") ? 2 : 0; }
+    if (event.type === "board") { board += lower.includes("perubahan") ? 3 : lower.includes("salahkan") ? -6 : 1; }
+    if (event.type === "fans") { fans += lower.includes("komunitas") || lower.includes("ofensif") ? 4 : 0; }
+    if (event.type === "locker") { fans += lower.includes("bonus") ? 1 : 0; cashDelta -= lower.includes("bonus") ? 12000 : 0; }
+    if (event.type === "youth") { rep += lower.includes("promosi") ? 1 : 0; }
+    if (lower.includes("bonus") || lower.includes("sponsor") || lower.includes("negosiasi")) cashDelta += 25000;
+    const effect = `${fans >= 0 ? "+" : ""}${fans} Fans · ${board >= 0 ? "+" : ""}${board} Board${rep ? ` · +${rep} Rep` : ""}${cashDelta ? ` · ${cashDelta > 0 ? "+" : ""}${money(cashDelta)} kas` : ""}`;
+    setStoryLog((prev) => prev.map((e) => e.id === eventId ? { ...e, choice, effect, resolvedWeek: week } : e));
+    setManager((m) => ({ ...m, reputation: clamp((m.reputation || 1) + rep, 1, 99), fanTrust: clamp(m.fanTrust + fans, 0, 100), boardTrust: clamp(m.boardTrust + board, 0, 100) }));
+    if (cashDelta) setCash((c) => c + cashDelta);
+    if (lower.includes("akademi")) setFacilities((f) => ({ ...f, academy: Math.min(5, (f.academy || 1) + (roll(28) ? 1 : 0)) }));
+    if (lower.includes("training")) setFacilities((f) => ({ ...f, training: Math.min(5, (f.training || 1) + (roll(28) ? 1 : 0)) }));
+    if (event.type === "rivalry" && event.relatedClubId && (lower.includes("rival") || lower.includes("panas") || lower.includes("derby"))) {
+      setTeams((prev) => prev.map((t) => t.id === MY_TEAM_ID ? { ...t, rivalId: event.relatedClubId, rivalryHeat: clamp((t.rivalryHeat || 0) + 18, 0, 100) } : t.id === event.relatedClubId ? { ...t, rivalId: MY_TEAM_ID, rivalryHeat: clamp((t.rivalryHeat || 0) + 18, 0, 100) } : t));
+    }
+    if (event.type === "agent" && lower.includes("negosiasi")) {
+      setTeams((prev) => prev.map((t) => t.id === MY_TEAM_ID ? { ...t, players: t.players.map((p, i) => i < 3 ? { ...p, morale: clamp((p.morale || 70) + 3, 35, 99) } : p) } : t));
+    }
+    setWorldNews((prev) => [{ id: `story-${eventId}`, week, season, tag: event.type ? `Story · ${event.type}` : "Story Impact", icon: event.type === "rivalry" ? "🔥" : event.type === "sponsor" ? "🤝" : event.type === "youth" ? "🌱" : "💬", title: `Pilihan story: ${choice}`, body: `${event.title || "Keputusan manager"}. Dampak: ${effect}. ${event.arc || "Pilihan ini memengaruhi berita, trust, finansial, dan reputasi klub."}` }, ...prev].slice(0, 180));
+    notify(`Story dipilih: ${effect}.`, fans + board >= 2 ? "success" : "info");
   };
 
   const upgradeFacility = (key) => {
@@ -2964,28 +3859,28 @@ function FootballManager() {
   return <div className="appShell">
     {notice && <Notice notice={notice} />}
     <header className="topbar">
-      <div className="brand"><div className="logo" style={{ background: myTeam.color }}>⚽</div><div><h1>{myTeam.name}</h1><p>Bola Catur Arena V11 · Career + LAN</p></div></div>
+      <div className="brand"><div className="logo" style={{ background: myTeam.color }}>⚽</div><div><h1>{myTeam.name}</h1><p>Bola Catur Arena V12 · Career + LAN</p></div></div>
       <div className="quickStats"><Stat label="Season" value={`S${season}`} /><Stat label="Pekan" value={`${Math.min(week, SEASON_LENGTH_WEEKS)}/${SEASON_LENGTH_WEEKS}`} /><Stat label="Posisi" value={`#${myRank}`} /><Stat label="Kas" value={money(cash)} /><Stat label="AP" value={active?.game ? active.game.ap : "-"} /></div>
-      <button className="primary big" onClick={startMatch}>{active ? "LANJUT MATCH" : "MAIN PEKAN"}</button>
+      <button className="primary big" onClick={startMatch}>{active ? "LANJUT MATCH" : preMatch ? "ATUR FORMASI" : "MAIN PEKAN"}</button>
     </header>
     <nav className="tabs">{tabs.map(([id, label]) => <button key={id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}>{label}</button>)}</nav>
     <main>
       {tab === "dashboard" && <Dashboard team={myTeam} rank={myRank} week={week} season={season} cash={cash} fixture={myFixture} teams={teams} startMatch={startMatch} active={active} facilities={facilities} trainingPlan={trainingPlan} objectives={objectives} objectiveCtx={objectiveCtx} claimed={claimed} startFriendly={startFriendly} />}
-      {tab === "inbox" && <InboxTab items={inboxItems({ myTeam, fixture: myFixture, week, cash, scoutQueue, storyLog, market, facilities, trainingPlan, active })} startMatch={startMatch} /> }
+      {tab === "inbox" && <InboxTab items={inboxItems({ myTeam, fixture: myFixture, fixtures: weekUserFixtures, week, cash, scoutQueue, pendingTransfers, storyLog, market, facilities, trainingPlan, active })} startMatch={startMatch} setTab={setTab} /> }
       {tab === "career" && <CareerTab manager={manager} saveNow={saveNow} exportSave={exportSave} loadNow={loadNow} resetSave={resetSave} importSaveFile={importSaveFile} />}
-      {tab === "calendar" && <CalendarTab fixtures={fixtureCalendar} teams={teams} week={week} log={log} myTeam={myTeam} competitionState={competitionState} />}
+      {tab === "calendar" && <CalendarTab fixtures={fixtureCalendar} teams={teams} week={week} season={season} log={log} myTeam={myTeam} competitionState={competitionState} />}
       {tab === "news" && <NewsTab items={newsItems({ teams, week, market, cash, storyLog, log, myTeam, worldNews })} />}
       {tab === "competitions" && <CompetitionsTab teams={teams} week={week} season={season} competitionState={competitionState} seasonHistory={seasonHistory} />}
-      {tab === "training" && <TrainingTab trainingPlan={trainingPlan} setTrainingPlan={setTrainingPlan} />}
-      {tab === "squad" && <SquadTab team={myTeam} selected={selectedPlayer} setSelected={setSelectedPlayer} sell={sell} />}
+      {tab === "training" && <TrainingTab trainingPlan={trainingPlan} setTrainingPlan={setTrainingPlan} facilities={facilities} team={myTeam} week={week} />}
+      {tab === "squad" && <SquadTab team={myTeam} selected={selectedPlayer} setSelected={setSelectedPlayer} sell={sell} listLoan={listLoan} kickPlayer={kickPlayer} extendContract={extendContract} checkPotential={checkPotential} respondOffer={respondOffer} />}
       {tab === "tactics" && <TacticsTab team={myTeam} formation={formation} setFormation={setFormation} lineupOverrides={lineupOverrides} setLineupOverrides={setLineupOverrides} setTeamStyle={setTeamStyle} />}
-      {tab === "match" && <MatchTab active={active} selectedId={selectedId} setSelectedId={setSelectedId} onAction={doAction} finishWeek={finishWeek} startMatch={startMatch} aiPaused={aiPaused} setAiPaused={setAiPaused} helpMode={helpMode} />}
+      {tab === "match" && (preMatch && !active ? <PreMatchTab preMatch={preMatch} teams={teams} formation={formation} setFormation={setFormation} lineupOverrides={lineupOverrides} setLineupOverrides={setLineupOverrides} setTeamStyle={setTeamStyle} trainingPlan={trainingPlan} setTrainingPlan={setTrainingPlan} facilities={facilities} beginMatch={beginPreparedMatch} cancel={() => setPreMatch(null)} /> : <MatchTab active={active} selectedId={selectedId} setSelectedId={setSelectedId} onAction={doAction} finishWeek={finishWeek} startMatch={startMatch} aiPaused={aiPaused} setAiPaused={setAiPaused} helpMode={helpMode} />)}
       {tab === "schedule" && <ScheduleTab fixtures={fixtures} teams={teams} week={week} log={log} competitionState={competitionState} />}
       {tab === "champions" && <ChampionsTab teams={sorted} week={week} log={log} />}
       {tab === "table" && <TableTab teams={teams} />}
-      {tab === "transfer" && <TransferTab market={market} cash={cash} week={week} buy={buy} loan={loan} scout={scout} scoutQueue={scoutQueue} scoutUsed={scoutUsed} scoutLimit={scoutLimit} />}
-      {tab === "youth" && <YouthTab team={myTeam} facilities={facilities} />}
-      {tab === "story" && <StoryTab storyLog={storyLog} answerStory={answerStory} />}
+      {tab === "transfer" && <TransferTab market={market} cash={cash} week={week} buy={buy} loan={loan} scout={scout} scoutRandom={scoutRandom} scoutQueue={scoutQueue} scoutUsed={scoutUsed} scoutLimit={scoutLimit} transferActionWeek={transferActionWeek} pendingTransfers={pendingTransfers} rejectScoutReport={rejectScoutReport} />}
+      {tab === "youth" && <YouthTab team={myTeam} facilities={facilities} week={week} sell={sell} listLoan={listLoan} promoteYouth={promoteYouth} checkPotential={checkPotential} />}
+      {tab === "story" && <StoryTab storyLog={storyLog} answerStory={answerStory} requestStoryMeeting={requestStoryMeeting} manager={manager} myTeam={myTeam} week={week} />}
       {tab === "facilities" && <FacilitiesTab facilities={facilities} cash={cash} upgrade={upgradeFacility} />}
       {tab === "objectives" && <ObjectivesTab objectives={objectives} ctx={objectiveCtx} claimed={claimed} startFriendly={startFriendly} />}
       {tab === "clubs" && <ClubsTab teams={teams} />}
@@ -3189,8 +4084,8 @@ function Card({ children, className = "", style }) { return <div className={`car
 function Section({ title, sub, children }) { return <section className="section"><div className="sectionHead"><h2>{title}</h2>{sub && <p>{sub}</p>}</div>{children}</section>; }
 
 function Dashboard({ team, rank, week, season, cash, fixture, teams, startMatch, active, facilities, trainingPlan, objectives, objectiveCtx, claimed, startFriendly }) {
-  const home = fixture && teams.find((t) => t.id === fixture.homeId);
-  const away = fixture && teams.find((t) => t.id === fixture.awayId);
+  const home = fixture && (teams.find((t) => t.id === fixture.homeId) || { id: fixture.homeId, name: fixture.homeName || "World Invite", style: "World", rivalId: null });
+  const away = fixture && (teams.find((t) => t.id === fixture.awayId) || { id: fixture.awayId, name: fixture.awayName || "World Invite", style: "World", rivalId: null });
   const isHome = fixture?.homeId === MY_TEAM_ID;
   const completedCount = objectives.filter((o) => claimed.includes(o.key) || objectiveComplete(o, objectiveCtx)).length;
   return <Section title="Dashboard" sub="Sekarang setiap pekan adalah pertandingan taktik playable dengan AP, skill, kartu taktik, stamina, kartu merah, cedera, ekonomi, dan target season.">
@@ -3203,8 +4098,50 @@ function Dashboard({ team, rank, week, season, cash, fixture, teams, startMatch,
   </Section>;
 }
 function ProgressLine({ label, value, target, done }) { const pct = clamp((value / target) * 100, 0, 100); return <div className="progressLine"><span>{label}</span><b>{done ? "Diklaim" : `${Math.min(value, target)}/${target}`}</b><i><em style={{ width: `${pct}%` }} /></i></div>; }
-function TrainingTab({ trainingPlan, setTrainingPlan }) {
-  return <Section title="Latihan Mingguan" sub="Pilih satu latihan sebelum MAIN PEKAN. Latihan langsung mengubah peluang di match engine."><div className="cardsGrid">{Object.entries(TRAINING_PLANS).map(([key, plan]) => <button key={key} className={`trainingCard ${trainingPlan === key ? "active" : ""}`} onClick={() => setTrainingPlan(key)}><strong>{plan.icon}</strong><b>{plan.label}</b><span>{plan.desc}</span></button>)}</div></Section>;
+function TrainingTab({ trainingPlan, setTrainingPlan, facilities, team, week }) {
+  const trainingLv = facilities?.training || 1;
+  const academyLv = facilities?.academy || 1;
+  const seniorCount = team?.players?.filter((p) => !p.academy).length || 0;
+  const youthCount = team?.players?.filter((p) => p.academy || p.age <= 20).length || 0;
+  const plan = TRAINING_PLANS[trainingPlan] || TRAINING_PLANS.balanced;
+  const estimatedXp = 7 + trainingLv * 5 + (plan.morale ? 2 : 0);
+  const academyXp = 4 + academyLv * 6;
+  return <Section title="Latihan Mingguan" sub="Latihan sekarang benar-benar menaikkan EXP pemain saat 1 pekan terlewati. Hanya satu fokus aktif per pekan.">
+    <div className="trainingSummary">
+      <Card><h3>Fokus Pekan {week}</h3><p className="bigText">{plan.icon} {plan.label}</p><small>{plan.desc}</small></Card>
+      <Card><h3>Training Ground</h3><div className="infoGrid"><span>Level</span><b>{trainingLv}/5</b><span>Estimasi EXP senior</span><b>+{estimatedXp} s/d +{estimatedXp + 16}</b><span>Pemain senior</span><b>{seniorCount}</b></div></Card>
+      <Card><h3>Akademi</h3><div className="infoGrid"><span>Level</span><b>{academyLv}/5</b><span>EXP youth mingguan</span><b>+{academyXp} s/d +{academyXp + 26}</b><span>Talenta muda</span><b>{youthCount}</b></div></Card>
+    </div>
+    <div className="cardsGrid">{Object.entries(TRAINING_PLANS).map(([key, item]) => <button key={key} className={`trainingCard ${trainingPlan === key ? "active" : ""}`} onClick={() => setTrainingPlan(key)}><strong>{item.icon}</strong><b>{item.label}</b><span>{item.desc}</span><small>EXP diproses saat lanjut pekan · boost dipengaruhi Training Ground Lv {trainingLv}</small></button>)}</div>
+    <Card className="tipCard"><h3>Catatan penting</h3><p>Jika EXP penuh, stat dan rating bisa naik. Pemain muda mendapat jalur tambahan dari Akademi, sedangkan pemain senior lebih kuat dari Training Ground. Fokus finishing/shooting sekarang masuk ke stat tembak.</p></Card>
+  </Section>;
+}
+
+function PreMatchTab({ preMatch, teams, formation, setFormation, lineupOverrides, setLineupOverrides, setTeamStyle, trainingPlan, setTrainingPlan, facilities, beginMatch, cancel }) {
+  const { fixture, userSide } = preMatch;
+  const homeTeam = teamForFixture(teams, fixture.homeId, preMatch.season || 1, fixture.stage);
+  const awayTeam = teamForFixture(teams, fixture.awayId, preMatch.season || 1, fixture.stage);
+  const userTeam = userSide === "home" ? homeTeam : awayTeam;
+  const enemyTeam = userSide === "home" ? awayTeam : homeTeam;
+  const enemyFormation = enemyTeam.preferredFormation || "4-3-3";
+  const userLineup = pickLineup(userTeam, formation, lineupOverrides);
+  const enemyLineup = pickLineup(enemyTeam, enemyFormation, {});
+  const [selectedSlot, setSelectedSlot] = useState(0);
+  const selected = userLineup[selectedSlot];
+  const usedIds = new Set(userLineup.map((x) => x.player.id));
+  const bench = userTeam.players.filter((p) => !usedIds.has(p.id) && p.injuredWeeks <= 0 && p.bannedWeeks <= 0).sort((a, b) => b.overall - a.overall);
+  const changePlayer = (playerId) => setLineupOverrides((old) => ({ ...old, [selectedSlot]: playerId }));
+  return <Section title="Pre-Match Formasi" sub="Klik MAIN PEKAN sekarang masuk ke ruang formasi dulu. Cek starting XI lawan, ubah formasi, ganti pemain dengan cadangan, pilih training plan, lalu mulai match.">
+    <div className="preMatchHero card"><div><p className="eyebrow">{fixture.cupName || leagueName(fixture.leagueKey) || "Liga"} · {fixture.stage || "Matchday"}</p><h3>{homeTeam.name} vs {awayTeam.name}</h3><p>{userSide === "home" ? "Kamu HOME" : "Kamu AWAY"} · Lawan gaya {enemyTeam.style} · Kick-off/restart dimulai dari penyerang, tetapi seluruh starting XI tetap di area sendiri sebelum garis tengah.</p></div><div className="preMatchActions"><button className="ghost" onClick={cancel}>Batal</button><button className="primary big" onClick={beginMatch}>Mulai Main</button></div></div>
+    <div className="preMatchGrid">
+      <Card><h3>Tim Kamu · {formation}</h3><div className="formationButtons compact">{Object.keys(FORMATIONS).map((f) => <button key={f} className={formation === f ? "active" : ""} onClick={() => { setFormation(f); setSelectedSlot(0); }}>{f}</button>)}</div><MiniPitch formation={formation} lineup={userLineup} selectedSlot={selectedSlot} setSelectedSlot={setSelectedSlot} /></Card>
+      <Card><h3>Starting XI Kamu</h3><div className="lineupList editable">{userLineup.map(({ player, slot, manual }, idx) => <button key={`${slot.pos}-${player.id}-${idx}`} className={idx === selectedSlot ? "active" : ""} onClick={() => setSelectedSlot(idx)}><b>{slot.pos}</b><span>{player.name}</span><small>{manual ? "Manual" : player.trait}</small><strong>{player.overall}</strong></button>)}</div></Card>
+      <Card><h3>Cadangan untuk {selected?.slot.pos}</h3><p className="muted">Pilih pengganti sebelum match dimulai. Cedera/sanksi tidak tampil.</p><div className="benchList">{bench.slice(0, 18).map((p) => <button key={p.id} onClick={() => changePlayer(p.id)}><b>{p.pos}</b><span>{p.name}</span><small>{traitText(p.trait)} · {roleSkillText(p.pos)}</small><strong>{p.overall}</strong></button>)}</div></Card>
+      <Card><h3>Lawan · {enemyFormation}</h3><MiniPitch formation={enemyFormation} lineup={enemyLineup} /><div className="lineupList compactList">{enemyLineup.map(({ player, slot }, idx) => <div key={`${slot.pos}-${player.id}-${idx}`}><b>{slot.pos}</b><span>{player.name}</span><small>{player.trait}</small><strong>{player.overall}</strong></div>)}</div></Card>
+      <Card><h3>Gaya Main</h3><p className="muted">Style mengubah off-ball, press, passing, shot, dan risiko AI teammate.</p><div className="formationButtons styleButtons">{Object.keys(STYLE_PROFILES).map((style) => <button key={style} className={userTeam.style === style ? "active" : ""} onClick={() => setTeamStyle(style)}>{style}<small>{STYLE_PROFILES[style].tempo}</small></button>)}</div></Card>
+      <Card><h3>Latihan Pekan Ini</h3><div className="formationButtons styleButtons">{Object.entries(TRAINING_PLANS).map(([key, plan]) => <button key={key} className={trainingPlan === key ? "active" : ""} onClick={() => setTrainingPlan(key)}>{plan.icon} {plan.label}<small>{plan.desc}</small></button>)}</div><div className="infoGrid"><span>Training Ground</span><b>Lv {facilities.training}</b><span>Medical</span><b>Lv {facilities.medical}</b><span>Academy</span><b>Lv {facilities.academy}</b></div></Card>
+    </div>
+  </Section>;
 }
 
 function MatchTab({ active, selectedId, setSelectedId, onAction, finishWeek, startMatch, aiPaused, setAiPaused, helpMode = false, tutorialStep = null }) {
@@ -3290,10 +4227,20 @@ function RunList({ title, piece, cells, onAction, humanTurn }) {
   return <div className="passList runList"><b>{title}</b>{cells.map((c) => <button key={`${piece.id}-${c.x}-${c.y}`} disabled={!humanTurn} onClick={() => onAction({ type: "move", pieceId: piece.id, x: c.x, y: c.y })}><span>Run ke {boardCellName(c.x, c.y)}</span><small>{c.cost}AP · pressure {Math.round(c.pressure || 0)}</small></button>)}</div>;
 }
 function SubstitutionBox({ game, piece, humanTurn, onAction }) {
+  const [query, setQuery] = useState("");
+  const [mode, setMode] = useState("fit");
   if (!piece || piece.side !== game.userSide || game.ended || game.goalPause) return null;
-  const options = compatibleBenchForPiece(game, piece);
-  if (!options.length) return null;
-  return <div className="subBox"><b>🔁 Substitution {game.subCount?.[piece.side] || 0}/5</b><small>Stamina rendah bikin skill, tackle, sprint, dan shot turun. Ganti pemain tanpa biaya AP.</small>{options.slice(0, 4).map((p) => <button key={p.id} disabled={!humanTurn || (game.subCount?.[piece.side] || 0) >= 5} onClick={() => onAction({ type: "sub", pieceId: piece.id, benchId: p.id })}>{p.pos} {firstName(p.name)} <small>OVR {p.overall} · Fit {p.fitness || 90}%</small></button>)}</div>;
+  const allBench = (game.bench?.[piece.side] || []).filter((p) => p && (p.injuredWeeks || 0) <= 0 && (p.bannedWeeks || 0) <= 0);
+  const fitOptions = compatibleBenchForPiece(game, piece);
+  const q = query.trim().toLowerCase();
+  const source = mode === "all" ? allBench.slice().sort((a, b) => b.overall - a.overall) : fitOptions;
+  const options = source.filter((p) => !q || `${p.name} ${p.pos} ${p.trait || ""}`.toLowerCase().includes(q));
+  if (!allBench.length) return <div className="subBox"><b>🔁 Substitution</b><small>Tidak ada pemain cadangan yang bisa masuk.</small></div>;
+  const subLimit = (game.subCount?.[piece.side] || 0) >= 5;
+  return <div className="subBox subBoxPro"><b>🔁 Substitution {game.subCount?.[piece.side] || 0}/5</b><small>Cari semua pemain skuad yang tidak sedang di lapangan, scroll daftar, dan pilih yang posisinya paling cocok untuk {piece.role}. Pergantian tidak memakai AP, kecuali pemain normal keluar tetap memakan sedikit waktu.</small>
+    <div className="subTools"><input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Cari nama / posisi..." /><div><button className={mode === "fit" ? "active" : ""} onClick={() => setMode("fit")}>Cocok Posisi</button><button className={mode === "all" ? "active" : ""} onClick={() => setMode("all")}>Semua Skuad</button></div></div>
+    <div className="subScroll">{options.map((p) => { const fit = benchFitScore(p, piece.role, piece.overall); const exact = p.pos === piece.role; return <button key={p.id} disabled={!humanTurn || subLimit} onClick={() => onAction({ type: "sub", pieceId: piece.id, benchId: p.id })}><b>{p.pos} {firstName(p.name)}</b><span>{exact ? "✅ posisi asli" : (COMPATIBLE[piece.role] || []).includes(p.pos) ? "↔️ kompatibel" : "⚠️ darurat"}</span><small>OVR {p.overall} · Fit {p.fitness || 90}% · Skor cocok {fit}</small></button>; })}</div>
+  </div>;
 }
 function MatchFx({ fx }) {
   if (!fx) return null;
@@ -3313,8 +4260,8 @@ function MatchSummary({ game, finishWeek }) {
   const awayPass = game.stats.away.passes ? Math.round((game.stats.away.passOk / game.stats.away.passes) * 100) : 0;
   return <div className="matchSummary"><b>🏁 Match Summary</b><h3>{game.homeName} {game.score.home} - {game.score.away} {game.awayName}</h3><p>MVP: {mvp?.role} {firstName(mvp?.name)} · OVR {mvp?.overall}</p><div className="summaryStats"><span>xG {Math.round(game.stats.home.xg * 100) / 100} - {Math.round(game.stats.away.xg * 100) / 100}</span><span>Pass {homePass}% - {awayPass}%</span><span>Shots {game.stats.home.shots} - {game.stats.away.shots}</span></div><div className="summaryMoments">{moments.map((h, i) => <small key={`${h.minute}-${i}`}>{h.minute}' {h.icon} {h.text}</small>)}</div><button className="primary full" onClick={finishWeek}>{game.friendly ? "Keluar Friendly" : "Selesaikan Pekan"}</button></div>;
 }
-function InboxTab({ items, startMatch }) {
-  return <Section title="Inbox Manager" sub="Ringkasan sebelum pekan: jadwal, scout, transfer, fitness, dan hal penting career."><div className="inboxGrid">{items.map((it, i) => <Card key={`${it.title}-${i}`} className="inboxCard"><strong>{it.icon}</strong><h3>{it.title}</h3><p>{it.body}</p></Card>)}<Card className="inboxCard action"><strong>⚽</strong><h3>Match Week</h3><p>Setelah membaca inbox, lanjut ke pertandingan pekan ini.</p><button className="primary full" onClick={startMatch}>Main Pekan</button></Card></div></Section>;
+function InboxTab({ items, startMatch, setTab }) {
+  return <Section title="Inbox Manager" sub="Inbox sekarang menjadi pusat keputusan cepat: match, youth, kontrak, offer, scout, meeting story, latihan, dan kalender."><div className="inboxGrid">{items.map((it, i) => <Card key={`${it.title}-${i}`} className={`inboxCard ${it.actionTab ? "clickable" : ""}`}><strong>{it.icon}</strong><h3>{it.title}</h3><p>{it.body}</p>{it.actionTab && <button className="ghost full" onClick={() => setTab(it.actionTab)}>{it.actionLabel || "Buka"}</button>}</Card>)}<Card className="inboxCard action"><strong>⚽</strong><h3>Match Week</h3><p>Setelah membaca inbox, lanjut ke pre-match dan atur formasi sebelum mulai.</p><button className="primary full" onClick={startMatch}>Main Pekan</button></Card></div></Section>;
 }
 
 function PassList({ title, options, type, piece, onAction, humanTurn }) { if (!options.length) return null; return <div className="passList"><b>{title}</b>{options.slice(0, 4).map((o) => <button key={`${type}-${o.target.id}`} disabled={!humanTurn} onClick={() => onAction({ type, pieceId: piece.id, targetId: o.target.id })}><span>{o.target.role} {firstName(o.target.name)}</span><small>{o.chance}% · {o.cost}AP{o.trap?.label ? ` · ${o.trap.trapped ? "terkepung" : "ditekan"}` : ""}{o.intercept?.risk ? ` · ${o.intercept.label}` : ""}<em>{reasonsToText(o.reasons)}</em></small></button>)}</div>; }
@@ -3362,27 +4309,50 @@ function Board({ game, selectedId, setSelectedId, runCells, passes, throughs, ta
         if (tackle && selectedId) { onAction({ type: "tackle", pieceId: selectedId, targetId: piece.id }); return; }
         if (canSelect) setSelectedId(piece.id);
       };
-      cells.push(<button key={`${x}-${y}`} className={`cell ${isGoal ? "goal" : ""} ${run ? "run" : ""} ${shotZone?.kind || ""} ${marker?.kind || ""} ${selected && shotZone ? "currentShot" : ""}` } onClick={onClick}><span className="coord">{boardCellName(x, y)}</span>{piece && <span className={`piece ${piece.side} ${selected ? "selected" : ""} ${pass ? "pass" : ""} ${through ? "through" : ""} ${tackle ? "tackle" : ""} ${piece.red ? "sentOff" : ""}`} title={`${piece.name} · ${piece.role} · ${piece.trait} · ${roleSkillText(piece)}`}><span className="kitGlow" /><b>{piece.role}</b><small>{piece.overall}</small><span className="pieceName">{firstName(piece.name)}</span><span className="roleSkillBadge">{ROLE_SKILL_ICONS[roleSkillsFor(piece.role)[0]] || "•"}</span>{piece.id === game.ballOwnerId && <i>⚽</i>}{piece.yellow > 0 && <u>🟨</u>}{stackedCount > 1 && <u className="stacked">+{stackedCount - 1}</u>}{pass && <em className="chanceChip">{pass.chance}%</em>}{through && <em className="chanceChip throughChip">{through.chance}%</em>}{tackle && <em className="chanceChip tackleChip">{tackle.chance}%</em>}</span>}{!piece && marker?.kind === "openSpace" && <span className="spaceMark">◎</span>}{!piece && marker?.kind === "passLane" && <span className="laneMark">━</span>}{!piece && marker?.kind === "dangerLane" && <span className="dangerMark">!</span>}{!piece && run && <span className="runDot">{run.kind === "keeper" ? "🧤" : run.kind === "dribble" ? "🌀" : "🏃"}<small>{run.cost}AP</small></span>}{!piece && !run && shotZone && <span className="shotZoneMark">🥅</span>}</button>);
+      cells.push(<button key={`${x}-${y}`} className={`cell ${isGoal ? "goal" : ""} ${run ? "run" : ""} ${shotZone?.kind || ""} ${marker?.kind || ""} ${selected && shotZone ? "currentShot" : ""}` } onClick={onClick}><span className="coord">{boardCellName(x, y)}</span>{piece && <span className={`piece ${piece.side} ${selected ? "selected" : ""} ${pass ? "pass" : ""} ${through ? "through" : ""} ${tackle ? "tackle" : ""} ${piece.red ? "sentOff" : ""} ${piece.vacant ? "vacant" : ""} ${pieceTemporarilyOut(game, piece) ? "minorOut" : ""}`} title={`${piece.name} · ${piece.role} · ${piece.trait} · ${roleSkillText(piece)}`}><span className="kitGlow" /><b>{piece.role}</b><small>{piece.overall}</small><span className="pieceName">{firstName(piece.name)}</span><span className="roleSkillBadge">{ROLE_SKILL_ICONS[roleSkillsFor(piece.role)[0]] || "•"}</span>{piece.id === game.ballOwnerId && <i>⚽</i>}{piece.vacant && <u>🚑</u>}{pieceTemporarilyOut(game, piece) && <u>🩹</u>}{piece.yellow > 0 && <u>🟨</u>}{stackedCount > 1 && <u className="stacked">+{stackedCount - 1}</u>}{pass && <em className="chanceChip">{pass.chance}%</em>}{through && <em className="chanceChip throughChip">{through.chance}%</em>}{tackle && <em className="chanceChip tackleChip">{tackle.chance}%</em>}</span>}{!piece && marker?.kind === "openSpace" && <span className="spaceMark">◎</span>}{!piece && marker?.kind === "passLane" && <span className="laneMark">━</span>}{!piece && marker?.kind === "dangerLane" && <span className="dangerMark">!</span>}{!piece && run && <span className="runDot">{run.kind === "keeper" ? "🧤" : run.kind === "dribble" ? "🌀" : "🏃"}<small>{run.cost}AP</small></span>}{!piece && !run && shotZone && <span className="shotZoneMark">🥅</span>}</button>);
     }
   }
-  return <div className="board" style={{ gridTemplateColumns: `repeat(${BOARD_COLS}, 1fr)`, gridTemplateRows: `repeat(${BOARD_ROWS}, minmax(34px, 1fr))`, aspectRatio: `${BOARD_COLS}/${BOARD_ROWS}` }}>{cells}</div>;
+  return <div className="board" style={{ gridTemplateColumns: `repeat(${BOARD_COLS}, 1fr)`, gridTemplateRows: `repeat(${BOARD_ROWS}, minmax(28px, 1fr))`, aspectRatio: `${BOARD_COLS}/${BOARD_ROWS}` }}>{cells}</div>;
 }
 function StatsBox({ game }) { return <div className="statsBox"><div><b>{game.stats.home.shots}</b><span>Shots</span><b>{game.stats.away.shots}</b></div><div><b>{game.stats.home.onTarget}</b><span>On Target</span><b>{game.stats.away.onTarget}</b></div><div><b>{Math.round(game.stats.home.xg * 100) / 100}</b><span>xG</span><b>{Math.round(game.stats.away.xg * 100) / 100}</b></div><div><b>{game.stats.home.fouls}</b><span>Fouls</span><b>{game.stats.away.fouls}</b></div><div><b>{game.stats.home.corners}</b><span>Corners</span><b>{game.stats.away.corners}</b></div></div>; }
 
-function SquadTab({ team, selected, setSelected, sell }) {
+function SquadTab({ team, selected, setSelected, sell, listLoan, kickPlayer, extendContract, checkPotential, respondOffer }) {
+  const [search, setSearch] = useState("");
   const order = { GK: 0, LB: 1, CB: 2, RB: 3, CDM: 4, CM: 5, CAM: 6, LM: 7, RM: 8, LW: 9, RW: 10, ST: 11 };
-  const players = [...team.players].sort((a, b) => (order[a.pos] ?? 99) - (order[b.pos] ?? 99) || b.overall - a.overall);
-  return <Section title="Skuad" sub={`${team.players.length} pemain. Cedera/sanksi otomatis memengaruhi starting XI.`}><div className="playerGrid">{players.map((p) => <PlayerCard key={p.id} player={p} active={selected?.id === p.id} onClick={() => setSelected(selected?.id === p.id ? null : p)} />)}</div>{selected && <Card className="detail"><div><h3>{selected.name}</h3><p>{POS_LABELS[selected.pos]} · {selected.age} tahun · {traitText(selected.trait)} · kontrak {selected.contract} tahun</p><p className="roleSkillLine">{roleSkillText(selected.pos)}</p><p className="muted">{roleSkillDesc(selected.pos)}</p><div className="skillBars big"><span>PAC <b>{selected.pace}</b></span><span>SHO <b>{selected.shoot}</b></span><span>PAS <b>{selected.pass}</b></span><span>DRI <b>{selected.dribble}</b></span><span>DEF <b>{selected.defend}</b></span></div><p className="muted">Fitness {selected.fitness}% · Morale {selected.morale} · Potential {selected.potential}</p></div><div><p className="bigMoney">{money(selected.value)}</p><button className="danger" onClick={() => sell(selected)}>Jual {money(Math.round(selected.value * (selected.loan ? 0.15 : 0.72)))}</button></div></Card>}</Section>;
+  const players = seniorPlayers(team).slice().sort((a, b) => (order[a.pos] ?? 99) - (order[b.pos] ?? 99) || b.overall - a.overall);
+  const q = search.trim().toLowerCase();
+  const filteredPlayers = players.filter((p) => !q || `${p.name} ${p.pos} ${p.trait || ""} ${p.personality || ""}`.toLowerCase().includes(q));
+  const selectedLive = selected ? players.find((p) => p.id === selected.id) || null : null;
+  const offer = selectedLive?.pendingOffer;
+  return <Section title="Skuad" sub={`${players.length} pemain senior. Pemain akademi baru masuk sini setelah Panggil ke Skuad Utama selesai diproses 1 pekan.`}>
+    <div className="squadTools"><span>Minimal skuad utama 18 pemain senior</span><span>Wage total: {money(teamWeeklyWage(team))}/pekan</span><span>Offer aktif: {players.filter((p) => p.pendingOffer).length}</span></div>
+    <div className="subTools squadSearch"><input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Cari pemain / posisi / trait..." /></div>
+    <div className="playerGrid">{filteredPlayers.map((p) => <PlayerCard key={p.id} player={p} active={selectedLive?.id === p.id} onClick={() => setSelected(selectedLive?.id === p.id ? null : p)} />)}</div>
+    {selectedLive && <Card className="detail"><div><h3>{selectedLive.name}</h3><p>{POS_LABELS[selectedLive.pos]} · {selectedLive.age} tahun · {traitText(selectedLive.trait)} · kontrak {selectedLive.contract ?? 0} tahun</p><p className="roleSkillLine">{roleSkillText(selectedLive.pos)}</p><p className="muted">{roleSkillDesc(selectedLive.pos)}</p><div className="skillBars big"><span>PAC <b>{selectedLive.pace}</b></span><span>SHO <b>{selectedLive.shoot}</b></span><span>PAS <b>{selectedLive.pass}</b></span><span>DRI <b>{selectedLive.dribble}</b></span><span>DEF <b>{selectedLive.defend}</b></span></div><p className="muted">Fitness {selectedLive.fitness}% · Morale {selectedLive.morale} · Potential {selectedLive.scouted ? selectedLive.potential : "??"} · XP {selectedLive.xp || 0}/100 · Level {selectedLive.level || 1}</p><div className="scoutBadge">Status: {selectedLive.listedForSale ? "💰 Dijual" : "-"} {selectedLive.listedForLoan ? "🤝 Bisa dipinjam" : ""} {selectedLive.loan ? ` · Loan sampai pekan ${selectedLive.loanReturnWeek || "?"}` : ""}</div>{selectedLive.pendingSquadAction && <div className="offerBox"><b>⏳ Aksi skuad menunggu pekan berikutnya</b><span>{selectedLive.pendingSquadAction.type} · selesai pekan {selectedLive.pendingSquadAction.dueWeek}</span></div>}{offer && <div className="offerBox"><b>{offer.clubName} memberi offer</b><span>{offer.type === "loan" ? `Loan ${offer.weeks} pekan` : "Transfer permanen"} · {money(offer.amount)}</span><div className="transferActions"><button className="primary" onClick={() => respondOffer(selectedLive, "accept")}>Terima</button><button className="ghost" onClick={() => respondOffer(selectedLive, "counter")}>Ajukan ulang</button><button className="danger" onClick={() => respondOffer(selectedLive, "reject")}>Tolak</button></div></div>}</div><div><p className="bigMoney">{money(selectedLive.value)}</p><div className="infoGrid"><span>Gaji</span><b>{money(selectedLive.wage || 0)}/pekan</b><span>Kontrak</span><b>{selectedLive.contract ?? 0} tahun</b><span>OVR/POT</span><b>{selectedLive.overall}/{selectedLive.scouted ? selectedLive.potential : "??"}</b></div><div className="transferActions vertical"><button onClick={() => extendContract(selectedLive)}>Perpanjang Kontrak</button><button className="ghost" onClick={() => checkPotential(selectedLive)}>Cek Potensi</button><button className="ghost" onClick={() => listLoan(selectedLive)}>Tandai Loan</button><button className="danger" onClick={() => sell(selectedLive)}>Tandai Jual</button><button className="danger" onClick={() => kickPlayer(selectedLive)}>Kick → Free Agent</button></div></div></Card>}
+  </Section>;
 }
 function traitText(key) { const t = TRAITS.find((x) => x.key === key); return t ? `${t.icon} ${t.key}` : key; }
-function PlayerCard({ player, active, onClick }) { return <button className={`playerCard ${active ? "active" : ""} ${player.injuredWeeks > 0 || player.bannedWeeks > 0 ? "unavailable" : ""}`} onClick={onClick}><span>{player.pos}</span><b>{player.name}</b><small>{player.age} thn · {player.scouted ? `POT ${player.potential}` : "POT ??"} · {player.personality || "Professional"} · {player.loan ? "Loan" : money(player.value)}</small><strong>{player.overall}</strong><div><i>PAC {player.pace}</i><i>SHO {player.shoot}</i><i>PAS {player.pass}</i><i>DEF {player.defend}</i></div><small>{traitText(player.trait)} {player.injuredWeeks ? `· 🏥 ${player.injuredWeeks}w` : ""}{player.bannedWeeks ? `· 🟥 ${player.bannedWeeks}w` : ""}</small><small className="roleMini">{roleSkillText(player.pos)}</small></button>; }
+function PlayerCard({ player, active, onClick }) { return <button className={`playerCard ${active ? "active" : ""} ${player.injuredWeeks > 0 || player.bannedWeeks > 0 ? "unavailable" : ""} ${player.pendingOffer ? "hasOffer" : ""}`} onClick={onClick}><span>{player.pos}</span><b>{player.name}</b><small>{player.age} thn · {player.scouted ? `POT ${player.potential}` : "POT ??"} · {player.personality || "Professional"} · {player.loan ? "Loan" : money(player.value)}</small><strong>{player.overall}</strong><div><i>PAC {player.pace}</i><i>SHO {player.shoot}</i><i>PAS {player.pass}</i><i>DEF {player.defend}</i></div><small>{traitText(player.trait)} {player.injuredWeeks ? `· 🏥 ${player.injuredWeeks}w` : ""}{player.bannedWeeks ? `· 🟥 ${player.bannedWeeks}w` : ""}{player.pendingOffer ? " · 📩 Offer" : ""}</small><small className="roleMini">Gaji {money(player.wage || 0)} · XP {player.xp || 0}/100 {player.listedForSale ? " · Dijual" : ""}{player.listedForLoan ? " · Loan list" : ""}</small></button>; }
 function TacticsTab({ team, formation, setFormation, lineupOverrides, setLineupOverrides, setTeamStyle }) {
   const [selectedSlot, setSelectedSlot] = useState(0);
+  const [benchSearch, setBenchSearch] = useState("");
   const lineup = pickLineup(team, formation, lineupOverrides);
   const selected = lineup[selectedSlot];
+  const selectedRole = selected?.slot?.pos || "CM";
+  const currentPlayerId = selected?.player?.id;
   const usedIds = new Set(lineup.map((x) => x.player.id));
-  const bench = team.players.filter((p) => !usedIds.has(p.id) && p.injuredWeeks <= 0 && p.bannedWeeks <= 0).sort((a, b) => b.overall - a.overall);
-  const changePlayer = (playerId) => setLineupOverrides((old) => ({ ...old, [selectedSlot]: playerId }));
+  const q = benchSearch.trim().toLowerCase();
+  const candidates = seniorPlayers(team)
+    .filter((p) => p.id !== currentPlayerId && (p.injuredWeeks || 0) <= 0 && (p.bannedWeeks || 0) <= 0)
+    .filter((p) => !q || `${p.name} ${p.pos} ${p.trait || ""}`.toLowerCase().includes(q))
+    .sort((a, b) => benchFitScore(b, selectedRole, selected?.player?.overall || 60) - benchFitScore(a, selectedRole, selected?.player?.overall || 60) || b.overall - a.overall);
+  const changePlayer = (playerId) => setLineupOverrides((old) => {
+    const next = { ...old, [selectedSlot]: playerId };
+    Object.keys(next).forEach((slotKey) => {
+      if (Number(slotKey) !== Number(selectedSlot) && String(next[slotKey]) === String(playerId)) delete next[slotKey];
+    });
+    return next;
+  });
   const clearManual = () => setLineupOverrides({});
   return <Section title="Taktik & Formasi" sub="Formasi, starting XI, dan gaya taktik langsung memengaruhi AI teammate, off-ball movement, pressing, passing, dan shot saat MAIN PEKAN.">
     <Card className="styleCoachCard"><h3>Gaya Main Aktif: {team.style}</h3><p className="muted">Pilih style agar menu taktik benar-benar berpengaruh ke match. Possession lebih aman, Counter lebih progresif, High Press lebih agresif, Park Bus lebih kuat bertahan.</p><div className="formationButtons styleButtons">{Object.keys(STYLE_PROFILES).map((style) => <button key={style} className={team.style === style ? "active" : ""} onClick={() => setTeamStyle(style)}>{style}<small>{STYLE_PROFILES[style].tempo}</small></button>)}</div></Card>
@@ -3390,43 +4360,87 @@ function TacticsTab({ team, formation, setFormation, lineupOverrides, setLineupO
     <div className="tacticsGrid pro">
       <Card><MiniPitch formation={formation} lineup={lineup} selectedSlot={selectedSlot} setSelectedSlot={setSelectedSlot} /></Card>
       <Card><div className="cardTop"><h3>Starting XI</h3><button className="ghost" onClick={clearManual}>Auto XI</button></div><div className="lineupList editable">{lineup.map(({ player, slot, manual }, idx) => <button key={`${slot.pos}-${player.id}-${idx}`} className={idx === selectedSlot ? "active" : ""} onClick={() => setSelectedSlot(idx)}><b>{slot.pos}</b><span>{player.name}</span><small>{manual ? "Manual" : player.trait}</small><strong>{player.overall}</strong></button>)}</div></Card>
-      <Card><h3>Cadangan untuk {selected?.slot.pos}</h3><p className="muted">Pilih pengganti. Pemain cedera/sanksi otomatis tidak masuk daftar.</p><div className="benchList">{bench.slice(0, 18).map((p) => <button key={p.id} onClick={() => changePlayer(p.id)}><b>{p.pos}</b><span>{p.name}</span><small>{traitText(p.trait)} · {roleSkillText(p.pos)}</small><strong>{p.overall}</strong></button>)}</div></Card>
+      <Card><h3>Ganti pemain untuk {selectedRole}</h3><p className="muted">Daftar ini sekarang menampilkan semua pemain senior yang tersedia, termasuk pemain yang sedang ada di Starting XI untuk swap. Pemain cedera/sanksi tidak tampil.</p><div className="subTools tacticsSearch"><input value={benchSearch} onChange={(e) => setBenchSearch(e.target.value)} placeholder="Cari nama / posisi..." /></div><div className="benchList">{candidates.map((p) => <button key={p.id} onClick={() => changePlayer(p.id)}><b>{p.pos}</b><span>{p.name}</span><small>{usedIds.has(p.id) ? "Starting XI · akan ditukar" : "Cadangan"} · {traitText(p.trait)} · skor cocok {benchFitScore(p, selectedRole, selected?.player?.overall || 60)}</small><strong>{p.overall}</strong></button>)}</div></Card>
     </div>
   </Section>;
 }
 function MiniPitch({ formation, lineup, selectedSlot = -1, setSelectedSlot = () => {} }) { const slots = lineForFormation(formation); return <div className="miniPitch">{slots.map((slot, i) => <button key={`${slot.pos}-${i}`} className={selectedSlot === i ? "active" : ""} onClick={() => setSelectedSlot(i)} style={{ left: `${(slot.x / (BOARD_COLS - 1)) * 100}%`, top: `${(slot.y / (BOARD_ROWS - 1)) * 100}%` }}><b>{lineup[i]?.player.overall || "?"}</b><span>{slot.pos}</span><small>{lineup[i]?.player.name.split(" ")[0]}</small></button>)}</div>; }
-function CalendarTab({ fixtures, teams, week, log, myTeam, competitionState }) {
+function CalendarTab({ fixtures, teams, week, season, log, myTeam, competitionState }) {
   const rows = [];
-  for (let w = Math.max(1, week - 2); w <= Math.min(SEASON_LENGTH_WEEKS, week + 10); w += 1) {
-    const weekFixtures = fixtures[w - 1] || [];
-    const mine = competitionFixtureForTeam(competitionState, w) || weekFixtures.find((m) => m.homeId === MY_TEAM_ID || m.awayId === MY_TEAM_ID);
-    const home = mine && teams.find((t) => t.id === mine.homeId);
-    const away = mine && teams.find((t) => t.id === mine.awayId);
-    if (mine) rows.push({ key: `main-${w}-${mine.key || mine.homeId}`, week: w, date: formatDateId(dateForWeek(w)), competition: mine.cupName || leagueName(mine.leagueKey), icon: mine.competition === "numberOne" ? "👑" : "🏆", home, away, status: log.find((m) => m.week === w && m.homeId === mine.homeId && m.awayId === mine.awayId) });
-    else rows.push({ key: `rest-${w}`, week: w, date: formatDateId(dateForWeek(w)), competition: "Rest/Event", icon: "🗓️", note: "Tidak ada laga user; AI growth, berita, scout, atau event random tetap berjalan." });
-    competitionEventsForWeek(w, teams).slice(1).forEach((e) => rows.push({ key: e.key, week: w, date: e.date, competition: e.competition, icon: e.icon, note: e.note, home: myTeam, away: null }));
-    if (NUMBER_ONE_WEEKS.groups.includes(w) || w === NUMBER_ONE_WEEKS.semi || w === NUMBER_ONE_WEEKS.final) rows.push({ key: `no1-info-${w}`, week: w, date: formatDateId(dateForWeek(w, 2)), competition: "Number 1 Championship", icon: "👑", note: w === NUMBER_ONE_WEEKS.final ? "Final dan trophy NO.1" : w === NUMBER_ONE_WEEKS.semi ? "Semi Final" : "Group stage top 1-5 tiap liga" });
+  const startWeek = Math.max(1, week - 4);
+  const endWeek = Math.min(SEASON_LENGTH_WEEKS, week + 14);
+  const dateKey = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  for (let w = startWeek; w <= endWeek; w += 1) {
+    const mineList = userFixturesForWeek(competitionState, fixtures, teams, w, season);
+    const baseDate = dateForWeek(w);
+    if (mineList.length) {
+      mineList.forEach((mine) => {
+        const home = teams.find((t) => t.id === mine.homeId) || { id: mine.homeId, name: mine.homeName || "World Invite" };
+        const away = teams.find((t) => t.id === mine.awayId) || { id: mine.awayId, name: mine.awayName || "World Invite" };
+        const offset = fixtureDayOffset(mine);
+        const eventDate = dateForWeek(w, offset);
+        rows.push({ key: `main-${w}-${fixtureUniqueKey(mine)}`, week: w, dateObj: eventDate, date: formatDateId(eventDate), competition: mine.cupName || leagueName(mine.leagueKey), icon: mine.icon || (mine.competition === "numberOne" ? "👑" : "⚽"), home, away, status: log.find((m) => m.week === w && ((m.matchKey && m.matchKey === fixtureUniqueKey(mine)) || (m.homeId === mine.homeId && m.awayId === mine.awayId && (m.competition || "league") === (mine.competition || "league")))) });
+      });
+    } else rows.push({ key: `rest-${w}`, week: w, dateObj: baseDate, date: formatDateId(baseDate), competition: "Rest/Event", icon: "🗓️", note: "Tidak ada laga user; AI growth, berita, scout, youth, kontrak, loan, atau event random tetap berjalan." });
+    competitionEventsForWeek(w, teams).slice(1).forEach((e, idx) => rows.push({ key: e.key, week: w, dateObj: dateForWeek(w, (idx % 5) + 1), date: e.date, competition: e.competition, icon: e.icon, note: e.note, home: myTeam, away: null }));
+    if (NUMBER_ONE_WEEKS.groups.includes(w) || w === NUMBER_ONE_WEEKS.semi || w === NUMBER_ONE_WEEKS.final) rows.push({ key: `no1-info-${w}`, week: w, dateObj: dateForWeek(w, 2), date: formatDateId(dateForWeek(w, 2)), competition: "Number 1 Championship", icon: "👑", note: w === NUMBER_ONE_WEEKS.final ? "Final dan trophy NO.1" : w === NUMBER_ONE_WEEKS.semi ? "Semi Final" : "Group stage top 1-5 tiap liga" });
   }
-  return <Section title="Calendar" sub="Tanggal, lawan, transfer window, kompetisi, dan event random. Pekan tanpa match user tetap bisa diproses agar season tidak mentok.">
-    <div className="calendarLayout"><Card><h3>Agenda Tim Kamu</h3><div className="calendarList">{rows.map((r) => <div key={r.key} className={`calendarRow ${r.week === week ? "active" : ""}`}><strong>{r.icon}</strong><span><b>{r.date}</b><small>Pekan {r.week} · {r.competition}</small></span><em>{r.home && r.away ? `${r.home.name} vs ${r.away.name}` : r.note}</em>{r.status && <i>{r.status.homeGoals}-{r.status.awayGoals}</i>}</div>)}</div></Card><Card><h3>Siklus Season</h3><div className="competitionStack"><div><b>🛒 Transfer Window</b><span>{transferWindowLabel(week)}</span><small>Beli/jual hanya saat window.</small></div><div><b>👑 Number 1 Championship</b><span>Pekan 50-58</span><small>Top 1-5 setiap liga, group stage, semi, final, trophy NO.1.</small></div>{LEAGUES.map((l) => <div key={l.key}><b>🏟️ {l.name}</b><span>{l.desc}</span><small>Promosi/degradasi aktif tiap akhir musim.</small></div>)}</div></Card></div>
+  const monthDate = dateForWeek(week);
+  const first = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+  const mondayOffset = (first.getDay() + 6) % 7;
+  const start = new Date(first);
+  start.setDate(first.getDate() - mondayOffset);
+  const days = Array.from({ length: 42 }, (_, i) => { const d = new Date(start); d.setDate(start.getDate() + i); return d; });
+  const monthLabel = monthDate.toLocaleDateString("id-ID", { month: "long", year: "numeric" });
+  const currentDateKey = dateKey(dateForWeek(week));
+  const wccActive = worldCupSeasonActive(season);
+  return <Section title="Kalender Season" sub="Tampilan kalender dibuat seperti kalender asli: bulan, hari, tanggal, agenda match, cup, transfer window, dan event penting. Jika 1 pekan ada 2+ laga, tanggalnya dipisah agar tidak berdekatan.">
+    <div className="calendarLayout realCalendarLayout">
+      <Card className="realCalendarCard">
+        <div className="calendarMonthHead"><div><h3>{monthLabel}</h3><small>Season {season} · Pekan aktif {week} · {transferWindowLabel(week)}</small></div><b>{wccActive ? "🏆🌍 WCC aktif" : "WCC tidak aktif"}</b></div>
+        <div className="realCalendarGrid">
+          {["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"].map((d) => <div key={d} className="calendarDow">{d}</div>)}
+          {days.map((d) => {
+            const key = dateKey(d);
+            const dayEvents = rows.filter((r) => dateKey(r.dateObj) === key).slice(0, 3);
+            return <div key={key} className={`calendarDay ${d.getMonth() !== monthDate.getMonth() ? "mutedDay" : ""} ${key === currentDateKey ? "today" : ""}`}>
+              <b>{d.getDate()}</b>
+              {dayEvents.map((e) => <span key={e.key} title={e.home && e.away ? `${e.home.name} vs ${e.away.name}` : e.note}>{e.icon} {e.competition}</span>)}
+            </div>;
+          })}
+        </div>
+      </Card>
+      <Card><h3>Agenda Tim Kamu</h3><div className="calendarList">{rows.map((r) => <div key={r.key} className={`calendarRow ${r.week === week ? "active" : ""}`}><strong>{r.icon}</strong><span><b>{r.date}</b><small>Pekan {r.week} · {r.competition}</small></span><em>{r.home && r.away ? `${r.home.name} vs ${r.away.name}` : r.note}</em>{r.status && <i>{r.status.homeGoals}-{r.status.awayGoals}</i>}</div>)}</div></Card>
+      <Card><h3>Siklus Season</h3><div className="competitionStack"><div><b>🛒 Transfer Window</b><span>{transferWindowLabel(week)}</span><small>Beli/jual hanya saat window.</small></div><div><b>👑 Number 1 Championship</b><span>Pekan 50-58</span><small>Top 1-5 setiap liga, group stage, semi, final, trophy NO.1.</small></div><div><b>🏆🌍 World Cup Championship</b><span>{wccActive ? "Season ini aktif" : "Aktif lagi setiap 3 season"}</span><small>Rank 1-3 tiap liga + 15 klub undangan dunia.</small></div>{LEAGUES.map((l) => <div key={l.key}><b>🏟️ {LEAGUE_CHAMPIONSHIP_NAMES[l.key]}</b><span>{l.name}</span><small>{LEAGUE_CHAMPIONSHIP_IMPACT[l.key]}</small></div>)}</div></Card>
+    </div>
   </Section>;
 }
 
 function NewsTab({ items }) {
-  return <Section title="Berita Club & Transfer" sub="News feed membuat career lebih hidup: rumor, hidden potential viral, cup draw, dan kondisi klub.">
-    <div className="newsGrid">{items.map((n, idx) => <Card key={`${n.tag}-${idx}`} className="newsCard"><div className="newsTag"><span>{n.icon}</span><b>{n.tag}</b></div><h3>{n.title}</h3><p>{n.body}</p></Card>)}</div>
+  const [category, setCategory] = useState("ALL");
+  const categories = ["ALL", "Club", "Transfer", "Youth", "World", "Competition", "Story"];
+  const getCat = (n) => /transfer|agent|free/i.test(n.tag) ? "Transfer" : /youth|u20|u17|akademi|viral/i.test(n.tag) ? "Youth" : /world|wcc|global|asia|africa|north|nations|olympic/i.test(n.tag) ? "World" : /cup|champ|league|juara|NO\.1/i.test(n.tag) ? "Competition" : /story|media|fans|board|sponsor|locker/i.test(n.tag) ? "Story" : "Club";
+  const filtered = category === "ALL" ? items : items.filter((n) => getCat(n) === category);
+  return <Section title="Media Center & Berita" sub="Berita kini punya kategori penting: club pulse, transfer, youth, world, competition, story impact, injury, rivalitas, dan board drama.">
+    <div className="newsFilters">{categories.map((c) => <button key={c} className={category === c ? "active" : ""} onClick={() => setCategory(c)}>{c}</button>)}</div>
+    <div className="newsGrid">{filtered.map((n, idx) => <Card key={`${n.tag}-${idx}`} className="newsCard"><div className="newsTag"><span>{n.icon}</span><b>{n.tag}</b></div><h3>{n.title}</h3><p>{n.body}</p><small className="muted">Kategori: {getCat(n)} · Baca karena bisa memengaruhi transfer, trust, gengsi, dan jadwal.</small></Card>)}</div>
   </Section>;
 }
 function CompetitionsTab({ teams, week, season, competitionState, seasonHistory }) {
   const no1 = ensureNumberOneState(competitionState, teams, week, season).numberOne;
   const participants = (no1.participants || []).map((id) => teams.find((t) => t.id === id)).filter(Boolean);
-  return <Section title="Competition Hub" sub="Kompetisi sekarang punya struktur: liga 4 tier, promosi/degradasi, group stage, knockout, trophy, dan histori juara.">
+  const worldCupQualified = LEAGUE_ORDER.flatMap((key) => sortLeagueTeams(teams, key).slice(0, 3));
+  const worldInvites = WORLD_EXTERNAL_CLUBS.map((name, i) => ({ id: `world-${i}`, name, power: 84 + (i % 6) + (i < 3 ? 4 : 0) }));
+  return <Section title="Competition Hub" sub="Kompetisi dibuat lebih mirip career sepakbola: per liga ada championship sendiri, ada kompetisi lintas liga, trophy, badge, gengsi, uang, dan efek reputasi klub.">
     <div className="competitionHub">
-      {LEAGUES.map((l) => <Card key={l.key}><h3>🏟️ {l.name}</h3><p>{l.desc}</p><div className="infoGrid"><span>Level</span><b>{l.level}</b><span>Promosi</span><b>{l.promo || "-"}</b><span>Degradasi</span><b>{l.relegation || "-"}</b><span>Juara</span><b>{money(l.prize.champion)}</b></div></Card>)}
-      <Card><h3>👑 Number 1 Championship</h3><p>Mulai pekan 50. Peserta: klub rank 1-5 dari setiap liga. Format: group stage, semi final, final, trophy NO.1.</p><div className="infoGrid"><span>Status</span><b>{no1.stage}</b><span>Peserta</span><b>{participants.length || "Top 20"}</b><span>Final</span><b>Pekan 58</b><span>Hadiah Juara</span><b>{money(600000)}</b></div></Card>
+      {LEAGUES.map((l) => <Card key={l.key}><h3>🏟️ {LEAGUE_CHAMPIONSHIP_NAMES[l.key]}</h3><p>{l.desc}</p><div className="infoGrid"><span>Liga</span><b>{l.name}</b><span>Level</span><b>{l.level}</b><span>Promosi</span><b>{l.promo || "-"}</b><span>Degradasi</span><b>{l.relegation || "-"}</b><span>Hadiah juara</span><b>{money(l.prize.champion)}</b><span>Impact</span><b>{LEAGUE_CHAMPIONSHIP_IMPACT[l.key]}</b></div></Card>)}
+      <Card><h3>👑 Number 1 Championship</h3><p>Mulai pekan 50. Peserta: klub rank 1-5 dari setiap liga. Format: group stage, semi final, final, trophy NO.1.</p><div className="infoGrid"><span>Status</span><b>{no1.stage}</b><span>Peserta</span><b>{participants.length || "Top 20"}</b><span>Final</span><b>Pekan 58</b><span>Hadiah Juara</span><b>{money(600000)}</b><span>Badge</span><b>👑 NO.1</b><span>Efek</span><b>Fans, sponsor, trust, market pull naik</b></div></Card>
+      {SPECIAL_CUP_CONFIGS.map((c) => <Card key={c.competition}><h3>{c.icon} {c.cupName}</h3><p>{c.note}</p><div className="infoGrid"><span>Pekan</span><b>{c.weeks.join(", ")}</b><span>Syarat</span><b>Rank 1-{c.minRank}</b><span>Hadiah</span><b>{money(c.prize)}</b><span>Gengsi</span><b>+{c.prestige}</b><span>Tanda klub</span><b>{c.cupName.split(" ").map((w) => w[0]).join("")}</b></div></Card>)}
+      <Card><h3>{WORLD_CUP_CHAMPIONSHIP.icon} {WORLD_CUP_CHAMPIONSHIP.cupName}</h3><p>{WORLD_CUP_CHAMPIONSHIP.note} Season 1 aktif, lalu setiap 3 season. Peserta rank 1-3 tiap liga + 15 klub random dunia. Pemenang mendapat label WCC dan efek paling besar ke klub.</p><div className="infoGrid"><span>Status season ini</span><b>{worldCupSeasonActive(season) ? "Aktif" : "Tidak"}</b><span>Pekan</span><b>{WORLD_CUP_CHAMPIONSHIP.weeks.join(", ")}</b><span>Hadiah final</span><b>{money(WORLD_CUP_CHAMPIONSHIP.prize)}</b><span>Badge</span><b>🏆🌍 WCC</b><span>Impact</span><b>Sponsor global, gengsi, fan trust, daya tarik bintang</b></div></Card>
       <Card><h3>🛒 Transfer Window</h3><p>Bursa tidak selalu terbuka. Ini mencegah market penuh/aneh dan membuat pekan transfer lebih ditunggu.</p><div className="infoGrid"><span>Sekarang</span><b>{transferWindowLabel(week)}</b><span>Awal</span><b>1-6</b><span>Mid</span><b>24-30</b><span>Akhir</span><b>55-58</b></div></Card>
     </div>
     <Card><h3>Peserta Number 1</h3>{participants.length ? <div className="miniTable">{participants.map((t, i) => <span key={t.id}><b>#{i + 1} {t.name}</b><small>{leagueName(t.leagueKey)} · PTS {t.pts} · Power {Math.round(teamPower(t))}</small></span>)}</div> : <p className="muted">Peserta akan di-draw otomatis saat memasuki pekan 50 berdasarkan klasemen.</p>}</Card>
+    <Card><h3>Preview World Cup Championship</h3><p className="muted">Klub rank 1-3 setiap liga otomatis layak. Di luar itu ada 15 undangan dunia dengan rating/pemain random kuat.</p><div className="miniTable">{worldCupQualified.map((t, i) => <span key={t.id}><b>Q{i + 1}. {t.name}</b><small>{leagueName(t.leagueKey)} · rank top 3 · Power {Math.round(teamPower(t))}</small></span>)}{worldInvites.slice(0, 15).map((t) => <span key={t.id}><b>🌍 {t.name}</b><small>World Invite · estimasi power {t.power}</small></span>)}</div></Card>
     <Card><h3>Histori Juara</h3>{seasonHistory?.length ? <div className="miniTable">{seasonHistory.slice(0, 16).map((h, i) => <span key={`${h.season}-${h.competition}-${i}`}><b>S{h.season} · {h.competition}</b><small>{h.championName}</small></span>)}</div> : <p className="muted">Belum ada season selesai.</p>}</Card>
   </Section>;
 }
@@ -3439,14 +4453,49 @@ function TableTab({ teams }) {
   const tables = groupedLeagueTables(teams);
   return <Section title="Klasemen" sub="4 liga aktif: Liga Championship → Liga 3 → Liga 2 → Liga 1. Promosi/degradasi diproses akhir musim.">{tables.map((league) => <Card key={league.key} className="tableWrap"><h3>{league.name}</h3><div className="table"><div className="thead"><span>#</span><span>Tim</span><span>P</span><span>M</span><span>S</span><span>K</span><span>GD</span><span>PTS</span></div>{league.teams.map((t, i) => { const p = t.wins + t.draws + t.losses; const gd = t.gf - t.ga; const zone = i < 3 && league.promo ? "promo" : i >= league.teams.length - 3 && league.relegation ? "relegate" : ""; return <div className={`tr ${t.id === MY_TEAM_ID ? "mine" : ""} ${zone}`} key={t.id}><span>{i + 1}</span><span><b>{t.name} {t.numberOneTitles ? "👑" : ""}</b><small>{t.style} · Power {Math.round(teamPower(t))} · {(t.form || []).join(" ")}</small></span><span>{p}</span><span>{t.wins}</span><span>{t.draws}</span><span>{t.losses}</span><span>{gd > 0 ? `+${gd}` : gd}</span><strong>{t.pts}</strong></div>; })}</div></Card>)}</Section>;
 }
-function TransferTab({ market, cash, week, buy, loan, scout, scoutQueue, scoutUsed, scoutLimit }) {
+function TransferTab({ market, cash, week, buy, loan, scout, scoutRandom, scoutQueue, scoutUsed, scoutLimit, transferActionWeek, pendingTransfers = [], rejectScoutReport }) {
   const [filter, setFilter] = useState("ALL");
-  const filtered = filter === "ALL" ? market : market.filter((p) => p.pos === filter);
+  const [sourceFilter, setSourceFilter] = useState("all");
+  const [minRating, setMinRating] = useState(0);
+  const [sortBy, setSortBy] = useState("rating");
+  const [loanWeeks, setLoanWeeks] = useState(15);
+  const [selectedReportId, setSelectedReportId] = useState(null);
   const windowOpen = isTransferWindow(week);
-  return <Section title="Transfer & Scout" sub={`Kas: ${money(cash)}. ${transferWindowLabel(week)}. Scout tertunda 1 match. Slot scout: ${scoutUsed}/${scoutLimit}. 85+ dan wonderkid tetap langka.`}>
-    <div className="scoutQueue">{scoutQueue.length ? scoutQueue.map((q) => <span key={q.id}>🔎 {q.name}: selesai setelah match</span>) : <span>Belum ada scout berjalan.</span>}</div>
+  const incomingLocked = transferActionWeek === week;
+  const selectedReport = market.find((p) => String(p.id) === String(selectedReportId));
+  const sourceOk = (p) => sourceFilter === "all"
+    || (sourceFilter === "free" && (!p.ownerTeamId || p.freeAgent || p.sourceClub === "Free Agent" || p.sourceClub === "Scout Network"))
+    || (sourceFilter === "club" && p.ownerTeamId && p.ownerTeamId !== MY_TEAM_ID)
+    || (sourceFilter === "mine" && (p.userListed || p.ownerTeamId === MY_TEAM_ID));
+  const filtered = (filter === "ALL" ? market : market.filter((p) => p.pos === filter))
+    .filter(sourceOk)
+    .filter((p) => (p.overall || 0) >= Number(minRating || 0))
+    .sort((a, b) => sortBy === "priceHigh" ? (b.value || 0) - (a.value || 0) : sortBy === "priceLow" ? (a.value || 0) - (b.value || 0) : (b.overall || 0) - (a.overall || 0) || (b.value || 0) - (a.value || 0))
+    .slice(0, 120);
+  const loanFactor = Number(loanWeeks) <= 3 ? 0.06 : Number(loanWeeks) <= 15 ? 0.14 : 0.24;
+  return <Section title="Transfer, Loan & Scout" sub={`Kas: ${money(cash)}. ${transferWindowLabel(week)}. Beli/loan masuk hanya 1x per pekan dan pemain baru tersedia pekan berikutnya.`}>
+    <div className="scoutQueue">
+      {scoutQueue.length ? scoutQueue.map((q) => <span key={q.id}>🔎 {q.hidden ? "Target anonim" : q.name}: target pekan {q.dueWeek}</span>) : <span>Belum ada scout berjalan.</span>}
+      {pendingTransfers.length ? pendingTransfers.map((t) => <span key={t.id}>🕒 {t.type === "loan" ? "Loan" : "Beli"} {t.player?.name}: masuk pekan {t.dueWeek}</span>) : null}
+      <button className="ghost" disabled={scoutQueue.length > 0 || scoutUsed >= scoutLimit} onClick={scoutRandom}>Scout pemain random</button>
+    </div>
+    {incomingLocked && <Card className="warningCard"><h3>⛔ Batas transfer pekan ini sudah dipakai</h3><p>Beli/loan pemain hanya boleh 1x per pekan selama transfer window. Pemain yang sudah deal tetap menunggu registrasi dan baru masuk skuad pekan berikutnya.</p></Card>}
+    {selectedReport && <Card className="transferReportDetail"><div><h3>🔎 Detail Report Scout</h3><p><b>{selectedReport.name}</b> · {selectedReport.pos} · {selectedReport.age} tahun · {selectedReport.sourceClub || "Scout Network"}</p><div className="infoGrid"><span>OVR</span><b>{selectedReport.overall}</b><span>POT</span><b>{selectedReport.scouted ? selectedReport.potential : "??"}</b><span>Harga</span><b>{money(selectedReport.value || 0)}</b><span>Gaji estimasi</span><b>{money(selectedReport.wage || Math.round((selectedReport.value || 5000) * 0.025 / 100) * 100)}/pekan</b></div><div className="skillBars big"><span>PAC <b>{selectedReport.pace}</b></span><span>SHO <b>{selectedReport.shoot}</b></span><span>PAS <b>{selectedReport.pass}</b></span><span>DRI <b>{selectedReport.dribble}</b></span><span>DEF <b>{selectedReport.defend}</b></span></div><p className="muted">Mental {selectedReport.personality || "Professional"} · Trait {traitText(selectedReport.trait)} · {selectedReport.rarePotential ? "Rare potential" : "Report normal"}. Klik Loan untuk kontrak sementara, Buy untuk permanen, atau Tolak untuk hapus report.</p></div><div className="transferActions vertical"><button disabled={!windowOpen || incomingLocked || cash < Math.round((selectedReport.value || 0) * loanFactor / 500) * 500} onClick={() => loan(selectedReport, loanWeeks)}>Kontrak sementara / Loan {loanWeeks}w</button><button className="primary" disabled={!windowOpen || incomingLocked || cash < (selectedReport.value || 0)} onClick={() => buy(selectedReport)}>Buy {money(selectedReport.value || 0)}</button><button className="danger" onClick={() => { rejectScoutReport?.(selectedReport); setSelectedReportId(null); }}>Tolak Report</button></div></Card>}
+    <div className="transferFilters"><label>Sumber <select value={sourceFilter} onChange={(e) => setSourceFilter(e.target.value)}><option value="all">Semua</option><option value="free">Free Agent / Scout</option><option value="club">Pemain dari klub</option><option value="mine">Pemain saya dijual/loan</option></select></label><label>Min Rating <input type="number" min="0" max="98" value={minRating} onChange={(e) => setMinRating(e.target.value)} /></label><label>Sorting <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}><option value="rating">Rating tinggi</option><option value="priceHigh">Harga tinggi</option><option value="priceLow">Harga rendah</option></select></label><label>Durasi Loan <select value={loanWeeks} onChange={(e) => setLoanWeeks(Number(e.target.value))}><option value={3}>3 pekan</option><option value={15}>15 pekan</option><option value={30}>30 pekan</option></select></label></div>
     <div className="formationButtons">{["ALL", ...EXTRA_POSITIONS].filter((v, i, a) => a.indexOf(v) === i).map((p) => <button key={p} className={filter === p ? "active" : ""} onClick={() => setFilter(p)}>{p}</button>)}</div>
-    <div className="playerGrid">{filtered.map((p) => <div key={p.id} className={`transferCard ${p.scoutStatus === "pending" ? "pending" : ""} ${p.scoutStatus === "gem" ? "gem" : ""}`}><PlayerCard player={p} active={false} onClick={() => scout(p)} /><div className="scoutBadge">{p.sourceClub || "Free Agent"} · {p.scoutStatus === "pending" ? "🔎 Scout berjalan" : p.scouted ? (p.rarePotential ? "🌟 Rare potential" : "📋 Scout normal") : "POT ??"}</div><div className="transferActions"><button className="ghost" disabled={p.scouted || p.scoutStatus === "pending" || scoutUsed >= scoutLimit} onClick={() => scout(p)}>Scout</button><button disabled={!windowOpen || cash < Math.round(p.value * 0.14)} onClick={() => loan(p)}>Loan {money(Math.round(p.value * 0.14))}</button><button disabled={!windowOpen || cash < p.value} onClick={() => buy(p)}>Buy {money(p.value)}</button></div></div>)}</div>
+    <div className="playerGrid">{filtered.map((p) => {
+      const loanFee = Math.round((p.value || 0) * loanFactor / 500) * 500;
+      const own = p.userListed || p.ownerTeamId === MY_TEAM_ID;
+      const clubPlayer = p.ownerTeamId && p.ownerTeamId !== MY_TEAM_ID;
+      const reportReady = p.randomScout || p.scoutReportWeek;
+      return <div key={p.id} className={`transferCard ${p.scoutStatus === "pending" ? "pending" : ""} ${p.scoutStatus === "gem" ? "gem" : ""} ${own ? "ownListed" : ""}`}>
+        <PlayerCard player={p} active={selectedReportId === p.id} onClick={() => reportReady ? setSelectedReportId(p.id) : null} />
+        <div className="scoutBadge">{own ? "Pemain klub kamu masuk daftar market" : clubPlayer ? `Pemain klub: ${p.sourceClub}` : p.sourceClub || "Free Agent"} · {p.scoutStatus === "pending" ? `🔎 Scout pekan ${p.scoutDueWeek || "?"}` : p.scouted ? (p.rarePotential ? "🌟 Rare potential" : "📋 Scout normal") : "POT ??"}{reportReady ? " · Klik kartu untuk detail" : ""}</div>
+        {own && <div className="offerBox"><b>📌 Status pemain kamu</b><span>{p.listedForSale ? "Dijual" : ""} {p.listedForLoan ? " · Bisa dipinjam" : ""}</span><small>Offer masuk akan diputuskan di menu Skuad: terima, tolak, atau ajukan ulang.</small></div>}
+        {reportReady && <div className="offerBox"><b>🔎 Report scout sudah jadi</b><small>Detail lengkap tersedia. Bisa kontrak sementara/loan, beli permanen, atau tolak report.</small></div>}
+        <div className="transferActions"><button className="ghost" disabled={own || p.scouted || p.scoutStatus === "pending" || scoutQueue.length > 0 || scoutUsed >= scoutLimit} onClick={() => scout(p)}>Lihat Potensi</button><button disabled={own || !windowOpen || incomingLocked || cash < loanFee} onClick={() => loan(p, loanWeeks)}>Loan {loanWeeks}w · {money(loanFee)}</button><button disabled={own || !windowOpen || incomingLocked || cash < p.value} onClick={() => buy(p)}>Buy {money(p.value)}</button></div>
+      </div>;
+    })}</div>
   </Section>;
 }
 function CareerTab({ manager, saveNow, exportSave, loadNow, resetSave, importSaveFile }) {
@@ -3458,15 +4507,53 @@ function CareerTab({ manager, saveNow, exportSave, loadNow, resetSave, importSav
     </div>
   </Section>;
 }
-function YouthTab({ team, facilities }) {
-  const youths = team.players.filter((p) => p.age <= 21).sort((a, b) => (b.potential - b.overall) - (a.potential - a.overall)).slice(0, 12);
-  return <Section title="Youth Academy & Growth" sub={`Akademi Lv ${facilities.academy}. Pemain muda berkembang lewat latihan, match, goal, dan personality.`}>
-    <div className="playerGrid">{youths.map((p) => <PlayerCard key={p.id} player={p} active={false} onClick={() => {}} />)}</div>
+function YouthTab({ team, facilities, week = 1, sell, listLoan, promoteYouth, checkPotential }) {
+  const academyLevel = facilities?.academy || 1;
+  const academyList = academyPlayers(team).sort((a, b) => (b.potential - b.overall) - (a.potential - a.overall) || b.overall - a.overall);
+  const seniorYoung = seniorPlayers(team).filter((p) => p.age <= 21).sort((a, b) => (b.potential - b.overall) - (a.potential - a.overall) || b.overall - a.overall);
+  const youths = [...academyList, ...seniorYoung].slice(0, 36);
+  const breakthroughChance = Math.min(35, 8 + academyLevel * 5);
+  const nextRefresh = Math.min(SEASON_LENGTH_WEEKS, Math.ceil(Math.max(1, week) / 20) * 20);
+  const topYouth = academyList[0] || seniorYoung[0];
+  return <Section title="Youth Academy & Growth" sub={`Akademi Lv ${academyLevel}. Tombol promosi hanya muncul untuk pemain berstatus Akademi. Setelah klik, promosi diproses saat Lanjut Pekan.`}>
+    <div className="youthSummary">
+      <Card><h3>🌱 Akademi Aktif</h3><div className="infoGrid"><span>Level Akademi</span><b>{academyLevel}/5</b><span>Pemain akademi</span><b>{academyList.length}</b><span>Pemain muda senior</span><b>{seniorYoung.length}</b><span>Chance breakthrough</span><b>±{breakthroughChance}%/pekan</b><span>EXP dasar</span><b>+{academyLevel * 6}/pekan</b><span>Refresh</span><b>Pekan 20/40/60</b></div></Card>
+      <Card><h3>Promosi ke Skuad Utama</h3><p>Pilih pemain dengan label <b>Akademi</b>, klik <b>Panggil ke Skuad Utama</b>, lalu tekan <b>Lanjut Pekan</b>. Pemain baru masuk senior setelah 1 pekan, dengan gaji dan kontrak otomatis.</p></Card>
+      <Card><h3>Laporan Pelatih</h3><p>{topYouth ? `${topYouth.name} paling menarik saat ini: ${topYouth.pos} OVR ${topYouth.overall}, ${topYouth.scouted ? `POT ${topYouth.potential}` : "POT belum dibuka"}. Mental: ${topYouth.personality}.` : "Belum ada pemain youth."}</p></Card>
+      <Card><h3>Refresh Akademi 20 Pekan</h3><p>Setiap pekan 20, 40, dan 60 daftar akademi diganti fresh. Pemain yang sudah masuk skuad utama, sedang menunggu promosi, ditandai jual, ditandai loan, atau punya offer tetap aman dan tidak dihapus.</p><div className="infoGrid"><span>Refresh berikutnya</span><b>Pekan {nextRefresh}</b><span>Dilindungi</span><b>Senior / Listed / Pending</b></div></Card>
+    </div>
+    {!academyList.length && <Card className="warningCard"><h3>⚠️ Akademi kosong</h3><p>Save lama mungkin belum punya data akademi. Sistem akan otomatis menambahkan intake youth saat game aktif. Klik Career Baru atau Load Browser Save kalau belum muncul.</p></Card>}
+    <div className="playerGrid">{youths.map((p) => {
+      const isAcademy = Boolean(p.academy);
+      const pendingPromote = p.pendingSquadAction?.type === "promoteYouth";
+      return <div key={p.id} className={`youthCard ${isAcademy ? "academy" : "seniorYouth"}`}>
+        <PlayerCard player={p} active={false} onClick={() => {}} />
+        <div className="youthStatusLine"><b>{isAcademy ? "🌱 Akademi" : "✅ Sudah Skuad Utama"}</b><span>{isAcademy ? "Belum bisa masuk match sampai dipromosikan" : "Ini pemain muda senior, jadi tombol promosi tidak diperlukan"}</span></div>
+        <div className="youthReport"><b>{p.rarePotential ? "🔥 Hidden Gem" : p.potential - p.overall >= 10 ? "🌟 Prospek bagus" : "📋 Prospek normal"}</b><span>Growth gap {Math.max(0, (p.potential || p.overall) - p.overall)} · Mental {p.personality || "Professional"} · Fasilitas Academy Lv {academyLevel}</span></div>
+        {p.pendingSquadAction && <div className="offerBox"><b>⏳ Menunggu pekan berikutnya</b><span>{p.pendingSquadAction.type} · selesai pekan {p.pendingSquadAction.dueWeek}</span></div>}
+        <div className="youthActions">
+          {isAcademy ? <button className="primary" disabled={Boolean(p.pendingSquadAction)} onClick={() => promoteYouth(p)}>{pendingPromote ? "Menunggu Promosi" : "Panggil ke Skuad Utama"}</button> : <button className="ghost" disabled>Sudah di Skuad Utama</button>}
+          <button className="ghost" disabled={Boolean(p.pendingSquadAction)} onClick={() => checkPotential(p)}>Cek Potensi</button>
+          <button className="ghost" disabled={Boolean(p.pendingSquadAction)} onClick={() => listLoan(p)}>Tandai Loan</button>
+          <button className="danger" disabled={Boolean(p.pendingSquadAction)} onClick={() => sell(p)}>Tandai Jual</button>
+        </div>
+        <small className="muted">XP {p.xp || 0}/100 · Level {p.level || 1} · POT {p.scouted ? p.potential : "??"} · {isAcademy ? "Akademi" : "Skuad utama"}</small>
+      </div>;
+    })}</div>
   </Section>;
 }
-function StoryTab({ storyLog, answerStory }) {
-  return <Section title="Story Event" sub="Event muncul tiap beberapa match/derby. Pilihan kecil ini mengubah trust, fans, dan arah career.">
-    {storyLog.length === 0 ? <Card className="empty"><h3>Belum ada story event</h3><p className="muted">Mainkan beberapa pekan untuk memicu media, fans, sponsor, atau drama skuad.</p></Card> : <div className="cardsGrid">{storyLog.map((e) => <Card key={e.id}><h3>{e.title}</h3><p className="muted">Pekan {e.week}{e.choice ? ` · Pilihan: ${e.choice}` : ""}</p>{e.choice ? <b>Efek: {e.effect}</b> : <div className="choiceList">{e.choices.map((c) => <button key={c} onClick={() => answerStory(e.id, c)}>{c}</button>)}</div>}</Card>)}</div>}
+
+function StoryTab({ storyLog, answerStory, requestStoryMeeting, manager, myTeam, week }) {
+  const open = storyLog.filter((e) => !e.choice).length;
+  const resolved = storyLog.filter((e) => e.choice).length;
+  const meetingUsed = storyLog.some((e) => e.manualMeeting && e.week === week);
+  return <Section title="Story Event & Media Room" sub="Story kini menjadi pusat keputusan manager: media, rivalitas, sponsor, agen, fans ultras, board ultimatum, locker room, youth, dan fasilitas.">
+    <div className="storyDashboard">
+      <Card><h3>🎙️ Meeting Media</h3><p>Meeting manual hanya bisa 1x per pekan. Efek pilihan masuk berita dan bisa memengaruhi trust, kas, rivalitas, fasilitas, dan morale pemain.</p><button className="primary full" disabled={meetingUsed} onClick={requestStoryMeeting}>{meetingUsed ? "Meeting Pekan Ini Sudah Dipakai" : "Buka Meeting Sekarang"}</button></Card>
+      <Card><h3>Trust & Reputasi</h3><div className="infoGrid"><span>Board</span><b>{manager.boardTrust}%</b><span>Fans</span><b>{manager.fanTrust}%</b><span>Reputasi</span><b>Lv {manager.reputation}</b><span>Rival aktif</span><b>{myTeam?.rivalId ? "Ada" : "Belum"}</b></div></Card>
+      <Card><h3>Arsip Story</h3><div className="infoGrid"><span>Belum dijawab</span><b>{open}</b><span>Selesai</span><b>{resolved}</b><span>Total</span><b>{storyLog.length}</b></div></Card>
+    </div>
+    {storyLog.length === 0 ? <Card className="empty"><h3>Belum ada story event</h3><p className="muted">Tekan Meeting Media atau mainkan beberapa pekan untuk memicu media, fans, sponsor, agen, board, atau drama skuad.</p></Card> : <div className="storyGrid">{storyLog.map((e) => <Card key={e.id} className={`storyCard ${e.choice ? "resolved" : "open"}`}><div className="newsTag"><span>{e.type === "rivalry" ? "🔥" : e.type === "sponsor" ? "🤝" : e.type === "youth" ? "🌱" : e.type === "board" ? "🏛️" : e.type === "agent" ? "🧾" : "💬"}</span><b>{e.type || "story"}</b></div><h3>{e.title}</h3><p className="muted">Pekan {e.week}{e.relatedClubName ? ` · ${e.relatedClubName}` : ""}{e.choice ? ` · Pilihan: ${e.choice}` : ""}</p>{e.stakes && <p>{e.stakes}</p>}{e.arc && <div className="storyArc">{e.arc}</div>}{e.choice ? <b>Efek: {e.effect}</b> : <div className="choiceList">{e.choices.map((c) => <button key={c} onClick={() => answerStory(e.id, c)}>{c}</button>)}</div>}</Card>)}</div>}
   </Section>;
 }
 function GoalOverlay({ game, onResume }) {
@@ -3475,7 +4562,23 @@ function GoalOverlay({ game, onResume }) {
   return <div className="goalOverlay"><div><strong>GOOOAL!</strong><h3>{game.homeName} {pause.score.home} - {pause.score.away} {game.awayName}</h3><p>{pause.text}</p><small>Restart: bola untuk tim yang kebobolan ({sideLabel(pause.restartSide)}). Klik lanjut saat siap.</small><button className="primary" onClick={onResume}>Lanjut Kick Off</button></div></div>;
 }
 
-function FacilitiesTab({ facilities, cash, upgrade }) { return <Section title="Fasilitas & Ekonomi" sub={`Kas: ${money(cash)}. Uang utama datang dari laga HOME. Upgrade membuat pemasukan dan perkembangan lebih besar.`}><div className="cardsGrid">{Object.entries(FACILITY_DEF).map(([key, def]) => { const level = facilities[key]; const cost = Math.round(def.baseCost * Math.pow(1.65, level - 1)); return <Card key={key}><h3>{def.icon} {def.label}</h3><p>{def.desc}</p><div className="facilityLevel">Level {level}/5</div><button disabled={level >= 5 || cash < cost} onClick={() => upgrade(key)}>{level >= 5 ? "Maks" : `Upgrade ${money(cost)}`}</button></Card>; })}</div></Section>; }
+function FacilitiesTab({ facilities, cash, upgrade }) {
+  const impact = {
+    stadium: (lv) => `Pemasukan HOME naik, gengsi stadion +${lv * 6}%, fan trust lebih mudah tumbuh.`,
+    training: (lv) => `EXP latihan senior +${lv * 5} dasar/pekan dan peluang rating naik lebih besar.`,
+    academy: (lv) => `Youth EXP +${lv * 6} dasar/pekan, peluang breakthrough ±${Math.min(35, 8 + lv * 5)}%.`,
+    medical: (lv) => `Durasi cedera lebih pendek, risiko cedera fatal turun, recovery stamina +${lv * 4}%.`,
+    merchandise: (lv) => `Pendapatan brand/jersey naik, efek trophy terasa lebih besar +${lv * 5}%.`,
+    sponsor: (lv) => `Offer sponsor dan bonus kompetisi lebih menarik, reputasi klub +${lv * 4}%.`,
+  };
+  return <Section title="Fasilitas & Ekonomi" sub={`Kas: ${money(cash)}. Fasilitas sekarang punya dampak langsung ke latihan, youth, medical, sponsor, dan perkembangan klub.`}>
+    <div className="cardsGrid">{Object.entries(FACILITY_DEF).map(([key, def]) => {
+      const level = facilities[key];
+      const cost = Math.round(def.baseCost * Math.pow(1.65, level - 1));
+      return <Card key={key}><h3>{def.icon} {def.label}</h3><p>{def.desc}</p><div className="facilityLevel">Level {level}/5</div><div className="facilityImpact">{impact[key]?.(level) || "Meningkatkan kualitas klub."}</div><button disabled={level >= 5 || cash < cost} onClick={() => upgrade(key)}>{level >= 5 ? "Maks" : `Upgrade ${money(cost)}`}</button></Card>;
+    })}</div>
+  </Section>;
+}
 
 function ChampionsTab({ teams, week, log }) {
   const qualified = teams.slice(0, 16);

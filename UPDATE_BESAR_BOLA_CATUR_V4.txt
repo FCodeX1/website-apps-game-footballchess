@@ -1,0 +1,18 @@
+UPDATE V4 - FIX YOUTH PROMOSI KE SKUAD UTAMA
+
+Fokus update:
+1. Tombol Panggil ke Skuad Utama sekarang muncul jelas di setiap pemain berstatus Akademi.
+2. Menu Youth sekarang memisahkan status:
+   - Akademi: punya tombol Panggil ke Skuad Utama.
+   - Sudah Skuad Utama: tombol promosi diganti info nonaktif agar tidak membingungkan.
+3. Save lama yang belum punya pemain akademi otomatis dibuatkan 6 pemain youth academy.
+4. Career baru langsung punya pemain academy sejak awal.
+5. Pemain academy tidak ikut Starting XI, cadangan, taktik, pre-match, atau hitungan gaji senior sebelum dipromosikan.
+6. Setelah klik Panggil ke Skuad Utama, pemain mendapat status menunggu promosi dan baru masuk skuad senior setelah Lanjut Pekan.
+7. Saat promosi selesai, pemain berubah menjadi senior, punya kontrak, gaji, dan bisa tampil di Skuad/Taktik/Match.
+8. Batas minimal 18 pemain senior dan maksimal 38 pemain senior sekarang menghitung senior saja, bukan pemain academy.
+9. Menu Skuad sekarang hanya menampilkan pemain senior. Pemain academy tetap di menu Youth sampai promosi selesai.
+10. Build sudah dites dengan npm run build dan berhasil.
+
+Catatan:
+Kalau masih memakai save browser lama, buka game lalu Load Browser Save atau masuk menu Youth. Sistem akan migrasi otomatis dan menambahkan intake academy agar tombol promosi muncul.

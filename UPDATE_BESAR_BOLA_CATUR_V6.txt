@@ -1,0 +1,96 @@
+UPDATE BESAR BOLA CATUR ARENA V6
+
+Build test:
+- npm run build: BERHASIL.
+
+Perubahan utama V6:
+
+1. Board gameplay diperkecil dan dibuat lebih enak dimainkan
+- Board diubah dari 20x12 menjadi 16x10.
+- Board tidak lagi terlalu panjang sehingga match tidak terasa terlalu lama.
+- Posisi starting XI tetap aman: semua pemain awal tetap berada di area sendiri dan tidak melewati garis tengah.
+- CSS board mobile diperbaiki agar tidak memaksa tampilan desktop/horizontal aneh.
+- Ukuran cell, token pemain, scoreboard, dan panel aksi disesuaikan untuk HP.
+
+2. Bola kick-off / restart setelah gol
+- Bola awal pertandingan sekarang kembali diberikan ke pemain menyerang.
+- Setelah ada gol, restart juga diberikan ke pemain menyerang dari tim yang kebobolan.
+- Walaupun bola di penyerang, posisi pemain tetap tidak melewati garis tengah.
+
+3. Pergantian pemain saat gameplay diperbaiki
+- Box substitution sekarang bisa scroll.
+- Ada kolom cari nama / posisi / trait.
+- Ada filter Cocok Posisi dan Semua Bench.
+- Daftar pemain cadangan diprioritaskan berdasarkan kecocokan posisi.
+- Pemain posisi asli diberi tanda, pemain kompatibel diberi tanda, pemain darurat diberi tanda.
+- Batas substitution 5 tetap berlaku.
+- Cedera fatal tetap mengosongkan posisi dan user bisa memilih pengganti dari daftar yang lengkap.
+
+4. Pre-match dan gameplay responsive mobile
+- Layout pre-match tidak lagi dipaksa 3 kolom di HP.
+- Mini pitch, lineup, bench, dan tombol mulai main dirapikan untuk layar kecil.
+- Gameplay mobile dibuat single-column: board, aksi, info, lalu history/stat.
+- Bottom/tab spacing disesuaikan agar tidak tertutup UI HP.
+
+5. Meeting Story dibatasi 1x per pekan
+- Tombol Buka Meeting Sekarang hanya bisa dipakai 1 kali per pekan.
+- Setelah dipakai, tombol berubah menjadi Meeting Pekan Ini Sudah Dipakai.
+- Jika user mencoba membuka lagi, muncul peringatan.
+- Setelah pekan berganti, meeting bisa dipakai lagi.
+
+6. Inbox Manager dibuat lebih berguna
+- Inbox sekarang menampilkan actionable card:
+  - match sedang berjalan,
+  - jumlah laga pekan ini,
+  - offer transfer/loan,
+  - youth menunggu promosi,
+  - pemain akademi siap dipantau,
+  - kontrak hampir habis,
+  - budget ketat,
+  - scout berjalan,
+  - target transfer terjangkau,
+  - story belum dijawab,
+  - meeting media tersedia / sudah dipakai,
+  - pemain kurang fit,
+  - kalender dan jadwal.
+- Setiap card penting punya tombol langsung menuju menu terkait.
+
+7. Berita diperluas
+- Media Center ditambah headline baru:
+  - locker room / pemain tidak puas,
+  - contract watch,
+  - market signal untuk pemain yang ditandai jual/loan,
+  - trophy legacy,
+  - rivalry heat,
+  - youth report,
+  - medical report,
+  - club pulse.
+- Berita makin berhubungan dengan kondisi asli klub dan keputusan user.
+
+8. Story diperluas
+- Tambahan event story baru:
+  - owner project,
+  - pemain inti gelisah,
+  - derby lokal memanas,
+  - keluarga wonderkid meminta kejelasan,
+  - bocoran ruang ganti ke media,
+  - sponsor global memantau klub.
+- Story tetap berdampak ke fans, board, reputasi, kas, fasilitas, rivalitas, morale, dan berita.
+
+9. Calendar layout diperbaiki
+- Kalender dibuat lebih stabil di desktop dan mobile.
+- Event pada HP tidak memaksa kotak kalender melebar.
+- Agenda list dibuat scroll agar rapi.
+- Pekan dengan lebih dari 1 laga tetap dipisahkan tanggalnya.
+
+10. Bug ganti pemain di taktik/squad diperbaiki
+- Menu Taktik sekarang menampilkan semua pemain senior yang tersedia untuk mengganti slot, bukan hanya sebagian cadangan.
+- Pemain yang sudah berada di Starting XI bisa dipilih untuk swap.
+- Saat memilih pemain yang sudah dipakai slot lain, override lama dibersihkan agar tidak duplicate / tidak gagal.
+- Ada search pemain di menu taktik.
+- Menu Skuad memakai data live terbaru agar selected player tidak nyangkut data lama.
+- Menu Skuad juga ditambah pencarian pemain.
+
+Catatan:
+- Season tetap 60 pekan.
+- Youth refresh 20/40/60 tetap aman: pemain yang sudah senior, menunggu promosi, ditandai jual, ditandai loan, atau punya offer tidak dihapus.

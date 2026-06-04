@@ -1,0 +1,74 @@
+UPDATE BESAR V3 - BOLA CATUR ARENA
+
+Build test:
+- npm run build: BERHASIL.
+
+Fokus utama V3:
+1. PRE-MATCH FORMASI
+- Tombol MAIN PEKAN tidak langsung masuk match.
+- Sekarang masuk ke layar Pre-Match Formasi dulu.
+- User bisa melihat tim sendiri dan lawan sebelum mulai.
+- User bisa mengganti formasi, memilih cadangan untuk starting XI, memilih gaya main, memilih latihan pekan ini, lalu tekan MULAI MAIN.
+- Layar ini dibuat responsif untuk desktop dan mobile.
+
+2. POSISI AWAL DAN KICK-OFF
+- Starting XI dipaksa berada di area sebelum garis tengah board.
+- Penyerang tidak lagi mulai terlalu maju melewati pemain bertahan.
+- Kick-off/restart dibuat dari kiper agar build-up lebih panjang dan tidak langsung masuk zona tembak.
+- Board tetap lebih luas 12x20 sehingga serangan butuh proses.
+
+3. GAMEPLAY BUG FIX
+- One-on-one diperbaiki: jika pemain membawa bola berhadapan dengan kiper dan tidak ada bek lebih dari 3 grid di depannya, penalti tekanan/bek tidak lagi menghukum secara tidak masuk akal.
+- One-on-one sekarang diberi bonus peluang dan label khusus.
+- Park Bus tidak mengurangi peluang tembakan one-on-one secara berlebihan.
+
+4. TAKTIK DAN FORMASI
+- Formasi ditambah lebih banyak: 4-1-2-1-2, 4-3-2-1, 3-2-4-1, 5-4-1, 3-4-2-1, 4-2-1-3, dan formasi lama tetap ada.
+- Gaya main ditambah: Gegenpress, Vertical Tiki Taka, Catenaccio.
+- Gaya main tetap berpengaruh ke AI teammate, pressing, off-ball run, passing, tempo, dan shot.
+- Tampilan taktik dan pre-match dibuat lebih rapi dan mudah dipakai.
+
+5. TRANSFER
+- Menu Transfer sekarang punya filter sumber: Semua, Free Agent, Pemain dari Klub, Pemain Saya Dijual/Loan.
+- Pemain milik user yang ditandai dijual atau dipinjamkan terlihat di Transfer.
+- Ada filter minimum rating.
+- Ada sorting rating tinggi, harga tinggi, harga rendah.
+- Loan punya pilihan durasi 3, 15, dan 30 pekan.
+- Lihat potensi sekarang memakai tombol, bukan klik kartu langsung.
+- Pemain sendiri tidak bisa dibeli/loan oleh diri sendiri; hanya tampil sebagai status market.
+
+6. YOUTH
+- Menu Youth diperbesar.
+- Ada ringkasan Academy Level, jumlah pemain akademi, chance breakthrough, EXP dasar.
+- Ada laporan pelatih untuk youth terbaik.
+- Ada tombol jelas: Panggil ke Skuad, Cek Potensi, Tandai Loan, Tandai Jual.
+- Panggil youth tidak instan: status menunggu promosi dan diproses setelah 1 pekan.
+- Setelah promosi, pemain menjadi senior, punya gaji, kontrak, scouted, dan hilang dari status akademi.
+- Youth tetap mendapat EXP mingguan dan efek Academy.
+
+7. STORY
+- Story diperbesar menjadi Media Room.
+- User bisa membuka meeting media kapan saja.
+- Story punya type, stakes, arc, related club, dan efek yang lebih permanen.
+- Keputusan story bisa memengaruhi fan trust, board trust, reputasi, kas, fasilitas, morale pemain, rivalitas, dan berita.
+- Ditambahkan event besar: sponsor, fans ultras, board ultimatum, agen pemain, locker room, fasilitas, youth spotlight, rivalitas.
+
+8. BERITA
+- Berita menjadi Media Center dengan filter kategori: ALL, Club, Transfer, Youth, World, Competition, Story.
+- Berita lebih berguna untuk melihat kondisi klub, rumor transfer, youth, trophy, cedera, story impact, dan kompetisi.
+- Keputusan story masuk ke berita sebagai dampak.
+
+9. MOBILE UI
+- Navigasi menu dibuat lebih aman di mobile dengan bottom tab fixed.
+- Topbar mobile tidak lagi menutup tab/menu.
+- Pre-match, transfer, youth, story, news, calendar, dan formasi diberi layout responsif.
+- Board tetap bisa digeser horizontal di mobile.
+
+10. KALENDER DAN KOMPETISI
+- Kalender asli dari v2 tetap dipertahankan: bulan, hari, tanggal, agenda match, cup, transfer window, dan event penting.
+- Competition hub, World Cup Championship, dan Number One Championship tetap aktif.
+- World Cup Championship season pertama aktif dan berikutnya tiap 3 season.
+
+Catatan penting:
+- File utama yang diubah: src/App.jsx dan src/styles.css.
+- Build production sudah sukses.

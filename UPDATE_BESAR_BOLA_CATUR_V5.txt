@@ -1,0 +1,37 @@
+UPDATE BESAR V5 - Youth Promotion, Youth Refresh, Season 60 Pekan, Multi Match Week
+
+1. PROMOSI YOUTH DIPERBAIKI
+- Tombol Panggil ke Skuad Utama tetap muncul hanya untuk pemain akademi.
+- Saat klik Panggil ke Skuad Utama, pemain mendapat status Menunggu Promosi.
+- Bug proses pending diperbaiki: aksi dueWeek +1 sekarang diproses saat pekan berjalan selesai, bukan menunggu 2 pekan.
+- Setelah Lanjut Pekan / match terakhir pekan selesai, pemain otomatis menjadi senior:
+  academy=false, masuk menu Skuad, punya kontrak, gaji, scouted=true, dan hilang dari kategori akademi murni.
+- Jika skuad senior penuh atau kas tidak cukup, promosi gagal dengan berita/peringatan.
+
+2. REFRESH AKADEMI SETIAP 20 PEKAN
+- Pada pekan 20, 40, dan 60, daftar pemain akademi normal otomatis diganti dengan intake baru/fresh.
+- Pemain yang sudah masuk skuad utama tidak diubah.
+- Pemain akademi yang sedang Menunggu Promosi tidak dihapus.
+- Pemain yang sedang ditandai Jual, ditandai Loan, atau punya Offer tetap aman dan tidak dihapus.
+- Menu Youth sekarang menampilkan informasi refresh pekan 20/40/60 dan perlindungan pemain.
+
+3. SEASON DIPENDEKKAN MENJADI 60 PEKAN
+- SEASON_LENGTH_WEEKS diubah dari 90 menjadi 60.
+- Jadwal kompetisi yang sebelumnya lewat pekan 60 disesuaikan ulang.
+- Transfer window akhir musim diperpanjang sampai pekan 60.
+- Akhir season, promosi/degradasi, aging, kontrak, youth intake, hadiah, dan fixture season baru berjalan setelah pekan 60 selesai.
+
+4. 1 PEKAN BISA LEBIH DARI 1 PERTANDINGAN
+- Sistem sekarang bisa membaca lebih dari satu laga user dalam pekan yang sama.
+- Jika ada liga + cup/kompetisi di pekan yang sama, game tidak langsung lompat pekan setelah match pertama.
+- Setelah match pertama selesai, sistem otomatis masuk lagi ke pre-match untuk laga berikutnya di pekan yang sama.
+- Efek mingguan seperti training, youth growth, kontrak, loan return, offer, refresh akademi, dan AI growth diproses setelah match terakhir pekan itu selesai.
+- Kalender memberi offset hari berbeda untuk liga/cup supaya laga tidak berdekatan.
+
+5. KALENDER DIPERBAIKI UNTUK MULTI MATCH
+- Calendar menampilkan beberapa agenda user dalam 1 pekan.
+- Tanggal match dipisah: liga awal pekan, cup/kompetisi beberapa hari setelahnya.
+- Agenda match, cup, Number 1 Championship, WCC, transfer window, dan event tetap terlihat di tampilan kalender asli.
+
+6. BUILD TEST
+- npm run build: BERHASIL.
