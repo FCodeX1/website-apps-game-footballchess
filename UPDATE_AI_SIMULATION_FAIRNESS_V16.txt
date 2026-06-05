@@ -1,0 +1,40 @@
+UPDATE AI SIMULATION FAIRNESS V16
+
+Fokus update:
+1. Menghapus bias besar home +5 dari AI simulation.
+2. Mengganti rumus skor random kasar menjadi model Expected Goals + Poisson.
+3. Menambahkan home advantage kecil dan kontekstual.
+4. Derby/knockout dibuat lebih ketat dan tidak terlalu berpihak ke home.
+5. Goal scorer sekarang weighted by role/atribut, bukan random 11 pemain.
+6. ST/CF/Winger/CAM lebih sering cetak gol, defender/GK jauh lebih jarang.
+7. Kartu dipengaruhi style: High Press lebih agresif, Park Bus lebih aman.
+8. Cedera dipengaruhi power/stamina/style, bukan 50:50 murni.
+9. Quick Sim timeline memakai xG yang sama dengan AI league simulation.
+10. Non-goal shot/save dibuat berdasarkan xG dan power agar match feed lebih masuk akal.
+11. Events hasil simulasi sekarang menyimpan xg metadata untuk audit balancing.
+12. Build production sudah berhasil setelah npm install memperbaiki optional Rollup dependency.
+
+File utama diubah:
+- src/App.jsx
+
+Fungsi utama yang ditambahkan/diupdate:
+- safePick
+- poissonGoals
+- aiHomeAdvantage
+- aiStyleAttackBonus
+- aiStyleDisciplineRisk
+- aiExpectedGoals
+- aiPlayerGoalWeight
+- weightedPickBy
+- aiPickScorerFromPieces
+- aiPickScorerFromTeam
+- aiMinuteBuckets
+- aiCardChanceForSide
+- aiInjuryChanceForSide
+- makeQuickSimTimeline
+- simulateOtherMatch
+
+Catatan fairness:
+- AI tidak dibuat curang terhadap player.
+- Home tetap punya advantage kecil realistis, bukan bonus power besar.
+- Tim kuat tetap lebih konsisten menang, tapi underdog masih mungkin menang secara wajar.

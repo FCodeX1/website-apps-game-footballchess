@@ -1,0 +1,33 @@
+UPDATE REALTIME GAMEPLAY FAIRNESS V17
+
+1. Kickoff fairness
+- Kickoff babak 1 tidak lagi selalu home.
+- Kickoff awal dipilih 50:50 home/away.
+- Kickoff babak 2 otomatis diberikan ke tim lawan dari kickoff babak 1.
+- Restart setelah gol tetap diberikan ke tim yang kebobolan.
+
+2. Free kick/foul realtime
+- Foul realtime sekarang benar-benar menghasilkan restart free kick.
+- Bola dipindahkan ke titik foul dan possession diberikan ke tim yang dilanggar.
+- UI/log menampilkan FREE KICK, bukan sekadar teks foul.
+
+3. Possession lebih presisi
+- Possession realtime dihitung berdasarkan akumulasi detik penguasaan bola.
+- Stats box dan match summary menampilkan possession percentage.
+
+4. Defensive AI / auto tackle
+- Defender lebih agresif di danger zone/final third.
+- High Press, Gegenpress, dan Physical punya radius tackle lebih aktif.
+- Defender berkualitas boleh melakukan tackle walau bukan assignment press/cover jika carrier masuk zona bahaya.
+
+5. Shot & goalkeeper trajectory
+- Save kiper tidak lagi hanya membaca jarak horizontal.
+- Save chance membaca trajectory shot dari titik tembakan ke target gawang.
+- Kiper dipengaruhi positioning, reaction, overall, defend, energy, shot speed, dan kualitas peluang.
+
+6. Match analytics
+- Stats realtime kini menampilkan saves dan possession.
+- Match summary menampilkan xG, possession, pass accuracy, shots, dan saves.
+
+Build validation:
+- npm run build: SUCCESS.

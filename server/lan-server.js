@@ -84,10 +84,33 @@ function touch(room, text = "") {
   room.updatedAt = Date.now();
   if (text) room.events = [{ id: `${room.updatedAt}-${Math.random()}`, text, at: room.updatedAt }, ...(room.events || [])].slice(0, 30);
 }
+function scoreTotal(game) {
+  return Number(game?.score?.home || 0) + Number(game?.score?.away || 0);
+}
+function validateMatchMutation({ room, clientId, side, body, currentRevision }) {
+  const actionType = String(body.actionType || "unknown");
+  const isHost = room.hostClientId === clientId;
+  const previousGame = room.match?.game || null;
+  const nextGame = body.game || null;
+  if (actionType === "hostTick" && !isHost) return "Host authoritative tick hanya boleh dikirim host.";
+  if (nextGame?.mode === "realtimeSoccer" && previousGame?.mode === "realtimeSoccer") {
+    const previousScore = scoreTotal(previousGame);
+    const nextScore = scoreTotal(nextGame);
+    if (nextScore < previousScore) return "Skor tidak boleh mundur.";
+    if (nextScore - previousScore > 1) return "Perubahan skor terlalu besar untuk satu sync.";
+    const prevClock = Number(previousGame.clockSeconds || 0);
+    const nextClock = Number(nextGame.clockSeconds || 0);
+    if (actionType !== "hostTick" && !isHost && nextClock - prevClock > 2.5) return "Clock realtime hanya boleh dimajukan host.";
+    if (nextClock + 1 < prevClock) return "Clock realtime tidak boleh mundur.";
+    if (body.playerSide && body.playerSide !== side) return "playerSide tidak cocok dengan room.";
+  }
+  if (Number(body.baseRevision ?? currentRevision) !== currentRevision) return "Room sudah berubah. Sinkron ulang sebelum aksi berikutnya.";
+  return "";
+}
 async function api(req, res, url) {
   if (url.pathname === "/api/lan/meta") {
     const lans = publicIps().map((ip) => `http://${ip}:${ACTIVE_PORT}`);
-    return json(res, 200, { ok: true, local: `http://127.0.0.1:${ACTIVE_PORT}`, lan: lans, port: PORT });
+    return json(res, 200, { ok: true, local: `http://127.0.0.1:${ACTIVE_PORT}`, lan: lans, port: ACTIVE_PORT });
   }
   if (url.pathname === "/api/lan/rooms" && req.method === "POST") {
     const body = await readBody(req);
@@ -148,7 +171,7 @@ async function api(req, res, url) {
     if (room.hostClientId !== clientId) return json(res, 403, { ok: false, error: "Hanya host yang bisa mulai match" });
     if (!room.players.home?.clubKey || !room.players.away?.clubKey) return json(res, 409, { ok: false, error: "Kedua pemain harus memilih klub" });
     room.status = "playing";
-    room.match = { game: body.game || null, startedAt: Date.now(), updatedAt: Date.now(), revision: 1 };
+    room.match = { game: body.game || null, startedAt: Date.now(), updatedAt: Date.now(), revision: 1, authority: "host", inputQueue: [] };
     touch(room, "Match LAN dimulai.");
     return json(res, 200, { ok: true, room: cleanRoom(room) });
   }
@@ -157,10 +180,20 @@ async function api(req, res, url) {
     const side = getSide(room, clientId);
     if (!side) return json(res, 403, { ok: false, error: "Belum accepted di room" });
     if (!room.match) room.match = { game: null, startedAt: Date.now(), revision: 0 };
-    room.match.game = body.game;
-    room.match.revision = (room.match.revision || 0) + 1;
+    const currentRevision = Number(room.match.revision || 0);
+    const validationError = validateMatchMutation({ room, clientId, side, body, currentRevision });
+    if (validationError) return json(res, 409, { ok: false, error: validationError, room: cleanRoom(room), expectedRevision: currentRevision });
+    const currentTurn = room.match.game?.turn;
+    if (room.match.game && room.match.game.mode !== "realtimeSoccer" && currentTurn && currentTurn !== side && body.actionType !== "resumeGoal") return json(res, 409, { ok: false, error: "Bukan giliran player ini.", room: cleanRoom(room) });
+    const nextGame = body.game || null;
+    if (nextGame) {
+      nextGame.lanSync = { revision: currentRevision + 1, updatedBy: side, updatedAt: Date.now(), authority: room.match.authority || "host", actionType: body.actionType || "unknown" };
+      nextGame.userSide = "home";
+    }
+    room.match.game = nextGame;
+    room.match.revision = currentRevision + 1;
     room.match.updatedAt = Date.now();
-    room.status = body.game?.ended ? "finished" : "playing";
+    room.status = nextGame?.ended ? "finished" : "playing";
     touch(room, body.eventText || `${room.players[side].name} melakukan aksi.`);
     return json(res, 200, { ok: true, room: cleanRoom(room), side });
   }

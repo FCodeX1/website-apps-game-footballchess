@@ -1,0 +1,82 @@
+UPDATE V20 - HARDENING & FULL QA
+
+Fokus:
+- Fix bug logika yang masih tersisa dari V19.
+- Tambah QA otomatis yang benar-benar menjalankan simulasi fairness/economy/market/rate.
+- Perkuat LAN multiplayer dengan host-authoritative tick guard.
+- Bersihkan dead code legacy yang tidak dipakai oleh main.jsx.
+
+Perubahan utama:
+1. Save Migration V20
+   - SAVE_VERSION dinaikkan ke 20.
+   - Field legacy injuryWeeks sekarang dimigrasikan ke injuredWeeks.
+   - bannedWeeks, fitness/stamina, redCard, yellowCards dinormalisasi.
+   - QA mengecek agar field injuryWeeks legacy tidak tertinggal di data pemain.
+
+2. Red Card Tactical Adaptation Fix
+   - AI tactical context tidak lagi menghitung kartu merah dari rtTeam() karena rtTeam() memfilter pemain red.
+   - Red card sekarang dihitung dari game.pieces langsung.
+   - Added manDisadvantage.
+   - Tim yang kalah jumlah pemain sekarang menurunkan attack/risk/press.
+   - Tim yang unggul jumlah pemain mendapat boost terkontrol.
+
+3. Deterministic QA / Replay Seed
+   - Ditambahkan hashSeed(), seededRandom(), makeReplaySeed().
+   - Match baru punya replaySeed untuk debug identitas match.
+   - QA simulator memakai seeded RNG agar hasil test stabil dan bisa diulang.
+
+4. Full Automated QA Harness
+   - scripts/full-qa.mjs ditambahkan.
+   - npm run qa sekarang menjalankan:
+     a. static source checks
+     b. 1000 match fairness test
+     c. 10 season economy stress test
+     d. transfer market stress test
+     e. injury/card rate test
+     f. save migration smoke test
+   - npm run build:qa menjalankan build production + semua QA.
+
+5. LAN Host-Authoritative Safeguards
+   - Server LAN punya validateMatchMutation().
+   - actionType hostTick hanya boleh dikirim host.
+   - Non-host tidak boleh memajukan realtime clock secara agresif.
+   - Skor tidak boleh mundur atau meloncat lebih dari 1 dalam satu sync.
+   - lanSync menyimpan authority, actionType, updatedBy, revision, updatedAt.
+   - Host browser menjalankan host authoritative tick untuk realtime LAN.
+   - Polling LAN dipercepat saat match aktif.
+
+6. Cleanup Dead Code
+   - src/components legacy dihapus.
+   - src/hooks legacy dihapus.
+   - src/game/ai.js dan src/game/rules.js legacy dihapus.
+   - Yang tersisa di src hanya file yang dipakai: App.jsx, main.jsx, styles.css, lib/firebase.js, game/fairnessTest.js.
+
+Validasi:
+- npm run build: SUCCESS
+- npm run qa: SUCCESS
+- npm run build:qa: SUCCESS
+
+Hasil full QA deterministic:
+- 1000 match fairness:
+  - Home win rate: 45.7%
+  - Away win rate: 27.3%
+  - Draw rate: 27.0%
+  - Average goals: 2.39
+  - Upset rate: 8.8%
+- 10 season economy:
+  - Average budget: 654,911
+  - Negative clubs: 0
+  - Rich clubs: 0
+- Transfer stress:
+  - Duplicate IDs: 0
+  - Value spread ratio: 12.87
+- Card/injury rate:
+  - Yellow rate: 2.26/match
+  - Red rate: 0.14/match
+  - Injury rate: 0.20/match
+- Save migration:
+  - legacy injuryWeeks -> injuredWeeks mapped correctly
+  - no legacy injuryWeeks left in smoke test
+
+Catatan profesional:
+V20 sudah lebih matang daripada V19 untuk beta stabil. Namun project masih memiliki App.jsx besar, sehingga refactor struktural penuh ke modul engine terpisah tetap menjadi rekomendasi jangka panjang jika fitur terus ditambah.

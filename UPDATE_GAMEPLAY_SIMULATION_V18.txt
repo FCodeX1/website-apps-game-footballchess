@@ -1,0 +1,39 @@
+V18 - Gameplay Simulation Professional Update
+
+1. AI Tactical Adaptation
+- AI sekarang membaca skor, menit, kartu merah, stamina rata-rata, kondisi unggul/tertinggal.
+- Saat tertinggal di menit akhir, AI menaikkan attack bias, risk pass, dan shooting urgency.
+- Saat unggul, AI menurunkan risiko, menjaga shape, dan lebih memilih safe pass/carry aman.
+- Saat stamina rendah atau kalah jumlah pemain, pressing dan risk otomatis turun.
+
+2. Player Role Behavior
+- Setiap role punya intent berbeda:
+  GK: safe distribution, no risky dribble.
+  CB: pass aman, duel, minim shooting.
+  Fullback: width/carry/cross lane.
+  CDM/CM: tempo pass dan support.
+  CAM: through ball dan creator.
+  Winger: carry wide, cut inside, progressive pass.
+  ST: shot priority dan central movement.
+
+3. Shot Quality System
+- Shot chance sekarang membaca angle, balance, composure, pressure, role intent, stamina, dan weak-foot/arah.
+- Log shot menampilkan quality: poor/ok/good/elite.
+- Spread tembakan lebih kecil jika quality bagus, lebih liar jika body balance buruk.
+
+4. Passing Intelligence
+- AI memilih safe pass/through ball berdasarkan style, skor, pressure, risk lane, role passer, role receiver, dan urgency.
+- Protect mode lebih menghargai pass aman.
+- Chase mode lebih berani through ball/progressive pass.
+
+5. Dribble Intelligence
+- AI dribble tidak random: membaca nearest defender, lane home, role width, role carry, score state, dan style.
+- Winger lebih natural melebar, ST/CAM lebih natural mencari tengah.
+
+6. Fairness Test Harness
+- Ditambahkan src/game/fairnessTest.js.
+- Bisa dipakai untuk batch test 1000 match: home win rate, away win rate, draw rate, upset rate, avg goals.
+
+Catatan:
+- Patch ini fokus gameplay simulation/AI behavior tanpa mengubah save data lama.
+- Existing V17 fairness tetap dipertahankan: kickoff babak 1 acak, babak 2 bergantian, foul restart, possession per detik, smarter tackle, trajectory keeper save.

@@ -1,0 +1,45 @@
+Bola Catur Arena - V19 Stability, QA, Save Migration, LAN Sync, Mobile Compact
+
+Update utama:
+1. Save migration system
+   - SAVE_VERSION dinaikkan ke 19.
+   - Load browser dan import JSON sekarang melewati migrateSave().
+   - Save lama dinormalisasi: teams, players, facilities, seasonStats, fixtureCalendar, competitionState, market, lineupOverrides, pendingTransfers, story/world news.
+   - Save file memberi notifikasi jika dimigrasikan dari versi lama.
+
+2. Cleanup project
+   - Menghapus file legacy/bak yang tidak dipakai:
+     src/App.jsx.v9bak
+     src/styles.css.v9bak
+     src/FootballManager.jsx
+   - Package dinaikkan ke v19.0.0.
+
+3. LAN multiplayer safeguards
+   - Memperbaiki bug meta server: PORT undefined diganti ACTIVE_PORT.
+   - Sync match memakai baseRevision.
+   - Server menolak aksi stale/desync dengan HTTP 409 dan mengirim room terbaru.
+   - Client auto reload room saat ada konflik sync.
+   - Game LAN menyimpan lanSync revision metadata.
+
+4. QA/debug panel ditingkatkan
+   - QA sekarang cek duplicate player, duplicate market, market owned conflict, missing league, skuad kurang dari 18, budget invalid, empty fixture weeks, average budget/wage, transfer value spread, Number One stage.
+   - UI QA diberi badge status.
+
+5. Mobile compact polish
+   - Save buttons menjadi full-width di mobile.
+   - LAN lobby dan club select lebih aman di layar kecil.
+   - Tables/feed/club groups diberi overflow aman.
+   - Card, tab, stat, player/transfer layout dibuat lebih compact.
+
+6. NPM scripts baru
+   - npm run qa
+   - npm run build:qa
+
+Validasi:
+- npm run build: sukses.
+- npm run qa: semua static checks OK.
+- npm run build:qa: sukses.
+
+Catatan:
+- Ini update stabilitas besar, bukan redesign visual total.
+- Refactor engine penuh ke banyak file belum dipisah total karena App.jsx masih monolitik, tetapi risiko update berikutnya sudah dikurangi lewat migration, QA, cleanup, dan LAN sync guard.

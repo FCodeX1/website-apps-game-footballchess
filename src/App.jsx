@@ -12,7 +12,7 @@ const SHOT_SIDE_RANGE = 2;
 const SKILL_SHOT_RANGE_BONUS = 1;
 const INITIAL_CASH = 50000;
 const SAVE_KEY = "bola-catur-arena-career-v6";
-const SAVE_VERSION = 16;
+const SAVE_VERSION = 20;
 const SAVE_FILE_NAME = "bola-catur-arena-save.json";
 const COMPETITIONS = {
   liga48: { key: "liga48", title: "Career 4 Liga", subtitle: "Mulai dari Liga Championship, promosi ke Liga 3, Liga 2, lalu Liga 1.", badge: "Multi Season" },
@@ -1380,6 +1380,20 @@ function drawCards(count = 3) {
   const pool = [...TACTIC_CARDS].sort(() => Math.random() - 0.5);
   return pool.slice(0, count).map((c) => ({ ...c, uid: `${c.key}-${Date.now()}-${Math.random().toString(36).slice(2)}` }));
 }
+function hashSeed(input = "bola-catur-arena") {
+  let h = 2166136261;
+  const text = String(input);
+  for (let i = 0; i < text.length; i += 1) { h ^= text.charCodeAt(i); h = Math.imul(h, 16777619); }
+  return h >>> 0;
+}
+function seededRandom(seedInput = "debug") {
+  let state = hashSeed(seedInput) || 1;
+  return () => {
+    state = Math.imul(1664525, state) + 1013904223 >>> 0;
+    return state / 4294967296;
+  };
+}
+function makeReplaySeed(label = "match") { return `${label}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`; }
 function createMatch({ homeTeam, awayTeam, userSide, userFormation, trainingPlan, facilities, lineupOverrides = {}, aiDifficulty = "Normal", helpMode = false, friendly = false }) {
   const homeFormation = homeTeam.id === MY_TEAM_ID ? userFormation : homeTeam.preferredFormation;
   const awayFormation = awayTeam.id === MY_TEAM_ID ? userFormation : awayTeam.preferredFormation;
@@ -1387,22 +1401,26 @@ function createMatch({ homeTeam, awayTeam, userSide, userFormation, trainingPlan
   const awayOverrides = awayTeam.id === MY_TEAM_ID ? lineupOverrides : {};
   const pieces = [...piecesFor(homeTeam, "home", homeFormation, facilities, homeOverrides), ...piecesFor(awayTeam, "away", awayFormation, facilities, awayOverrides)];
   const isDerby = homeTeam.rivalId === awayTeam.id || awayTeam.rivalId === homeTeam.id;
+  const firstKickoffSide = Math.random() < 0.5 ? "home" : "away";
+  const secondHalfKickoffSide = otherSide(firstKickoffSide);
+  const firstKickoffTeamName = firstKickoffSide === "home" ? homeTeam.name : awayTeam.name;
   const game = {
     homeId: homeTeam.id, awayId: awayTeam.id, homeName: homeTeam.name, awayName: awayTeam.name,
     homeColor: homeTeam.color, awayColor: awayTeam.color, homeStyle: homeTeam.style, awayStyle: awayTeam.style,
-    homeFormation, awayFormation, userSide, trainingPlan, facilities, isDerby, aiDifficulty, helpMode, friendly,
-    pieces, ballOwnerId: kickoffPlayer(pieces, "home"), turn: "home", ap: MAX_AP, score: { home: 0, away: 0 }, actionNo: 1, maxActions: MAX_ACTIONS, clockSeconds: 0,
-    ended: false, winner: null, momentum: { home: 1, away: 0 }, effects: { home: [], away: [] }, usedCards: [], userCards: drawCards(4),
+    homeFormation, awayFormation, userSide, trainingPlan, facilities, isDerby, aiDifficulty, helpMode, friendly, replaySeed: makeReplaySeed(`${homeTeam.name}-vs-${awayTeam.name}`),
+    pieces, ballOwnerId: kickoffPlayer(pieces, firstKickoffSide), turn: firstKickoffSide, ap: MAX_AP, score: { home: 0, away: 0 }, actionNo: 1, maxActions: MAX_ACTIONS, clockSeconds: 0,
+    kickoff: { firstSide: firstKickoffSide, secondSide: secondHalfKickoffSide, half: 1, halftimeDone: false },
+    ended: false, winner: null, momentum: { home: firstKickoffSide === "home" ? 1 : 0, away: firstKickoffSide === "away" ? 1 : 0 }, effects: { home: [], away: [] }, usedCards: [], userCards: drawCards(4),
     bench: { home: benchFor(homeTeam, homeFormation, homeOverrides), away: benchFor(awayTeam, awayFormation, awayOverrides) },
     aiPlan: pick(AI_PLANS), goalPause: null, highlights: [], lastGoalRestartSide: null, setPiece: null, subCount: { home: 0, away: 0 }, actionFx: null,
     stats: { home: emptyStats(), away: emptyStats() },
-    lastAction: `Kick off ${homeTeam.name}.`,
-    history: [{ minute: 1, icon: isDerby ? "🔥" : "⚽", text: isDerby ? `Derby panas: ${homeTeam.name} vs ${awayTeam.name}.` : `Kick off ${homeTeam.name}.` }],
+    lastAction: `Kick off ${firstKickoffTeamName}.`,
+    history: [{ minute: 1, icon: isDerby ? "🔥" : "⚽", text: isDerby ? `Derby panas: ${homeTeam.name} vs ${awayTeam.name}. Kick off ${firstKickoffTeamName}.` : `Kick off ${firstKickoffTeamName}.` }],
     events: [],
   };
   return makeRealtimeSoccerGame(applyAutoShape(game));
 }
-function emptyStats() { return { shots: 0, onTarget: 0, goals: 0, passes: 0, passOk: 0, tackles: 0, tackleOk: 0, fouls: 0, yellows: 0, reds: 0, corners: 0, offsides: 0, possession: 0, injuries: 0, xg: 0 }; }
+function emptyStats() { return { shots: 0, onTarget: 0, goals: 0, passes: 0, passOk: 0, tackles: 0, tackleOk: 0, fouls: 0, yellows: 0, reds: 0, corners: 0, offsides: 0, possession: 0, possessionSeconds: 0, saves: 0, injuries: 0, xg: 0 }; }
 function matchMaxSeconds(game) { return game?.matchMaxSeconds || MATCH_CLOCK_SECONDS; }
 function minuteOf(game) {
   const maxMinute = Math.round(matchMaxSeconds(game) / 60);
@@ -1548,12 +1566,73 @@ function applyAutoShape(game) {
   resolvePieceCollisions(game);
   return game;
 }
+function defaultFacilities() { return { stadium: 1, training: 1, academy: 1, medical: 1, merchandise: 1, sponsor: 1 }; }
+function defaultSeasonStats() { return { homeWins: 0, derbyWins: 0, goals: 0, youthDeveloped: 0 }; }
+function normalizeSavePlayer(p, idx, teamId) {
+  const legacyInjury = Math.max(0, Number(p?.injuredWeeks ?? p?.injuryWeeks ?? 0));
+  const legacyBan = Math.max(0, Number(p?.bannedWeeks ?? p?.banWeeks ?? 0));
+  return {
+    ...(p || {}),
+    teamId: teamId ?? p?.teamId,
+    id: p?.id ?? Number(`${teamId || 0}${idx + 100}`),
+    morale: clamp(Number(p?.morale ?? 70), 0, 100),
+    fitness: clamp(Number(p?.fitness ?? p?.stamina ?? 100), 0, 100),
+    stamina: clamp(Number(p?.stamina ?? p?.fitness ?? 100), 0, 100),
+    injuredWeeks: legacyInjury,
+    injuryWeeks: undefined,
+    bannedWeeks: legacyBan,
+    yellowCards: Math.max(0, Number(p?.yellowCards || 0)),
+    redCard: Boolean(p?.redCard || p?.red),
+  };
+}
+function normalizeSaveTeam(team, fallbackLeague = "championship") {
+  const safe = { ...(team || {}) };
+  safe.players = Array.isArray(safe.players) ? safe.players.map((p, idx) => normalizeSavePlayer(p, idx, safe.id)) : [];
+  safe.leagueKey = safe.leagueKey || fallbackLeague;
+  safe.budget = Number.isFinite(Number(safe.budget)) ? Number(safe.budget) : INITIAL_CASH;
+  safe.style = safe.style || "Balanced";
+  safe.preferredFormation = safe.preferredFormation || "4-3-3";
+  safe.news = Array.isArray(safe.news) ? safe.news : [];
+  safe.aiNews = Array.isArray(safe.aiNews) ? safe.aiNews : [];
+  safe.transferPolicy = safe.transferPolicy || safe.style;
+  return safe;
+}
+function migrateSave(raw) {
+  if (!raw || typeof raw !== "object") return null;
+  const version = Number(raw.version || 0);
+  const migrated = { ...raw, version: SAVE_VERSION, migratedFrom: version || "legacy", migratedAt: Date.now() };
+  migrated.facilities = { ...defaultFacilities(), ...(raw.facilities || {}) };
+  migrated.seasonStats = { ...defaultSeasonStats(), ...(raw.seasonStats || {}) };
+  migrated.week = Math.max(1, Number(raw.week || 1));
+  migrated.season = Math.max(1, Number(raw.season || 1));
+  migrated.cash = Number.isFinite(Number(raw.cash)) ? Number(raw.cash) : INITIAL_CASH;
+  migrated.formation = raw.formation || "4-3-3";
+  migrated.trainingPlan = TRAINING_PLANS[raw.trainingPlan] ? raw.trainingPlan : "balanced";
+  migrated.aiDifficulty = AI_DIFFICULTIES[raw.aiDifficulty] ? raw.aiDifficulty : "Normal";
+  migrated.helpMode = Boolean(raw.helpMode);
+  migrated.selectedClubId = raw.selectedClubId || MY_TEAM_ID;
+  migrated.selectedCoachKey = raw.selectedCoachKey || "balanced";
+  migrated.teams = Array.isArray(raw.teams) ? raw.teams.map((t) => normalizeSaveTeam(t)) : [];
+  migrated.market = Array.isArray(raw.market) ? raw.market : [];
+  migrated.log = Array.isArray(raw.log) ? raw.log : [];
+  migrated.storyLog = Array.isArray(raw.storyLog) ? raw.storyLog : [];
+  migrated.worldNews = Array.isArray(raw.worldNews) ? raw.worldNews : [];
+  migrated.lineupOverrides = raw.lineupOverrides && typeof raw.lineupOverrides === "object" ? raw.lineupOverrides : {};
+  migrated.scoutQueue = Array.isArray(raw.scoutQueue) ? raw.scoutQueue : [];
+  migrated.pendingTransfers = Array.isArray(raw.pendingTransfers) ? raw.pendingTransfers : [];
+  migrated.claimed = Array.isArray(raw.claimed) ? raw.claimed : [];
+  migrated.seasonHistory = Array.isArray(raw.seasonHistory) ? raw.seasonHistory : [];
+  migrated.fixtureCalendar = Array.isArray(raw.fixtureCalendar) ? raw.fixtureCalendar : buildLeagueFixtures(migrated.teams.length ? migrated.teams : INITIAL_TEAMS, migrated.season);
+  migrated.competitionState = raw.competitionState || initialCompetitionState(migrated.season);
+  migrated.manager = raw.manager || { name: "Coach Arjuna", reputation: 1, boardTrust: 70, fanTrust: 70 };
+  return migrated;
+}
 function saveCareer(payload) { try { window.localStorage.setItem(SAVE_KEY, JSON.stringify({ version: SAVE_VERSION, savedAt: Date.now(), ...payload })); return true; } catch { return false; } }
-function loadCareer() { try { const raw = window.localStorage.getItem(SAVE_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; } }
+function loadCareer() { try { const raw = window.localStorage.getItem(SAVE_KEY); return raw ? migrateSave(JSON.parse(raw)) : null; } catch { return null; } }
 function clearCareer() { try { window.localStorage.removeItem(SAVE_KEY); } catch {} }
 function downloadCareerFile(payload) {
   try {
-    const blob = new Blob([JSON.stringify({ version: SAVE_VERSION, exportedAt: Date.now(), ...payload }, null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify(migrateSave({ version: SAVE_VERSION, exportedAt: Date.now(), ...payload }), null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
@@ -2117,12 +2196,18 @@ function rtTeamShapeTarget(game, piece, raw, carrier) {
   if (!piece || !raw || piece.role === "GK" || rtIsManuallyControlled(game, piece)) return raw;
   const phase = rtShapePhase(game, piece.side, carrier);
   const style = styleProfile(game, piece.side);
+  const adaptive = rtAdaptiveTactic(game, piece.side);
+  const roleIntent = rtRoleIntent(piece);
   const ball = game.ball || { x: FIELD_W / 2, y: FIELD_H / 2 };
   const dir = rtSideDir(piece.side);
   let x = raw.x;
   let y = raw.y;
   const [minY, maxY] = rtRoleBand(piece.side, piece.role, phase);
   y = clamp(y, minY, maxY);
+  // Tactical adaptation: AI lebih agresif saat tertinggal dan lebih kompak saat unggul/tenaga habis.
+  if (phase === "attack" && adaptive.attackBias) y = clampFieldY(y + dir * adaptive.attackBias * 4.8);
+  if ((phase === "defend" || phase === "press") && adaptive.protectBias) y = clampFieldY(y - dir * adaptive.protectBias * 3.6);
+  if (phase === "attack" && roleIntent.width) x = clampFieldX(x + Math.sign((piece.homeX ?? x) - 50) * Math.abs(roleIntent.width) * 0.18);
   const anchorX = rtRoleWidthAnchor(piece);
   const width = rtStyleWidthMod(game, piece.side);
   const line = rtRoleLine(piece.role);
@@ -2149,6 +2234,7 @@ function rtTeamShapeTarget(game, piece, raw, carrier) {
     y = y * 0.78 + (piece.homeY ?? y) * 0.22;
   }
   if (phase === "attack" && ["ST", "LW", "RW", "CAM"].includes(piece.role)) y = rtClampSmartY(game, piece.side, piece.role, y, "attack");
+  if (phase === "attack" && ["CB", "LB", "RB", "CDM"].includes(piece.role) && adaptive.protectBias > 0.45) y = y * 0.72 + (piece.homeY ?? y) * 0.28;
   return { x: clampFieldX(x), y: clampFieldY(y) };
 }
 function rtPassDecisionBias(game, carrier, passTarget, shot) {
@@ -2160,6 +2246,75 @@ function rtPassDecisionBias(game, carrier, passTarget, shot) {
   const pressure = rtOpponent(game, carrier.side).filter((e) => rtDist(e, carrier) < 8).length * 4;
   const shotPull = shot?.can ? shot.chance * 0.18 : 0;
   return passTarget.overall * 0.08 + forward * 0.42 + support + pressure - risk * 0.55 - shotPull;
+}
+
+function rtScoreContext(game, side) {
+  const minute = minuteOf(game);
+  const own = Number(game?.score?.[side] || 0);
+  const opp = Number(game?.score?.[otherSide(side)] || 0);
+  const diff = own - opp;
+  const active = rtTeam(game, side);
+  const redFor = (game.pieces || []).filter((p) => p.side === side && p.red && !p.vacant).length;
+  const redAgainst = (game.pieces || []).filter((p) => p.side === otherSide(side) && p.red && !p.vacant).length;
+  const manDisadvantage = redFor - redAgainst;
+  const avgEnergy = active.reduce((sum, p) => sum + (p.energy ?? 80), 0) / Math.max(1, active.length);
+  return { minute, diff, trailing: diff < 0, leading: diff > 0, late: minute >= 70, urgent: diff < 0 && minute >= 62, protect: diff > 0 && minute >= 65, redFor, redAgainst, manDisadvantage, avgEnergy };
+}
+function rtAdaptiveTactic(game, side) {
+  const ctx = rtScoreContext(game, side);
+  const baseStyle = sideStyle(game, side);
+  const losingBoost = ctx.urgent ? 1.35 : ctx.trailing ? 0.72 : 0;
+  const protectBoost = ctx.protect ? 1.05 : ctx.leading ? 0.38 : 0;
+  const redPenalty = ctx.manDisadvantage > 0 ? 0.55 + ctx.manDisadvantage * 0.18 : 0;
+  const redAdvantageBoost = ctx.manDisadvantage < 0 ? Math.min(0.34, Math.abs(ctx.manDisadvantage) * 0.16) : 0;
+  const tiredPenalty = ctx.avgEnergy < 45 ? 0.28 : 0;
+  const styleRisk = ({ Counter: 0.22, "Long Ball": 0.26, "All Out Attack": 0.52, Gegenpress: 0.32, "High Press": 0.25, "Park Bus": -0.36, Catenaccio: -0.44, Possession: -0.14, "Tiki Taka": -0.08 })[baseStyle] || 0;
+  const attackBias = clamp(styleRisk + losingBoost + redAdvantageBoost - protectBoost - redPenalty - tiredPenalty, -1.15, 1.65);
+  const riskBias = clamp(styleRisk * 0.8 + losingBoost * 0.65 + redAdvantageBoost * 0.75 - protectBoost * 0.72 - redPenalty * 0.35, -1.05, 1.35);
+  const pressBias = clamp((baseStyle === "High Press" || baseStyle === "Gegenpress" ? 0.42 : 0) + losingBoost * 0.35 + redAdvantageBoost * 0.35 - protectBoost * 0.25 - redPenalty * 0.4 - tiredPenalty * 0.55, -0.65, 1.1);
+  const tempo = attackBias > 0.75 ? "chase" : protectBoost > 0.55 ? "protect" : baseStyle;
+  return { ...ctx, baseStyle, attackBias, riskBias, pressBias, protectBias: protectBoost, tempo };
+}
+function rtRoleIntent(piece) {
+  const role = piece?.role || "CM";
+  if (role === "GK") return { shoot: -99, pass: 12, through: -8, carry: -20, width: 0, press: -12 };
+  if (["CB"].includes(role)) return { shoot: -28, pass: 5, through: -10, carry: -8, width: 0, press: 4 };
+  if (["LB", "RB"].includes(role)) return { shoot: -16, pass: 6, through: 2, carry: 4, width: 10, press: 7 };
+  if (role === "CDM") return { shoot: -14, pass: 10, through: 0, carry: -2, width: 0, press: 8 };
+  if (role === "CM") return { shoot: -4, pass: 12, through: 5, carry: 2, width: 0, press: 5 };
+  if (["LM", "RM"].includes(role)) return { shoot: 0, pass: 8, through: 6, carry: 8, width: 12, press: 6 };
+  if (role === "CAM") return { shoot: 8, pass: 10, through: 13, carry: 8, width: 0, press: 4 };
+  if (["LW", "RW"].includes(role)) return { shoot: 9, pass: 5, through: 10, carry: 14, width: 14, press: 5 };
+  if (role === "ST") return { shoot: 18, pass: -2, through: 4, carry: 8, width: -4, press: 3 };
+  return { shoot: 0, pass: 0, through: 0, carry: 0, width: 0, press: 0 };
+}
+function rtShotQuality(game, piece, stick = { mag: 0, x: 0, y: 0 }) {
+  if (!piece) return { value: 0, label: "none", weakFoot: 0, balance: 0, composure: 0, angle: 0, firstTime: 0 };
+  const goalY = rtAttackGoalY(piece.side);
+  const distGoal = Math.abs(piece.ry - goalY);
+  const angle = clamp(1 - Math.abs(piece.rx - goalCenterX()) / 48, 0, 1);
+  const pressure = rtOpponent(game, piece.side).filter((e) => rtDist(e, piece) < 7.4).length;
+  const balance = clamp((piece.energy ?? 80) / 100 + (piece.dribble || 60) / 260 - pressure * 0.11, 0.15, 1.18);
+  const composure = clamp((piece.overall || 60) / 100 + (piece.shoot || 60) / 310 - pressure * 0.08, 0.15, 1.16);
+  const weakFoot = stick.mag && ((piece.role === "LW" && stick.x < -0.35) || (piece.role === "RW" && stick.x > 0.35)) ? -4.5 : 0;
+  const firstTime = !game.ballOwnerId && game.ball?.intent?.targetId === piece.id ? 3.5 : 0;
+  const closeBonus = distGoal < 15 ? 5 : distGoal < 22 ? 1.5 : -2.5;
+  const role = rtRoleIntent(piece).shoot * 0.18;
+  const value = angle * 9 + balance * 6 + composure * 6 + closeBonus + firstTime + weakFoot + role;
+  const label = value >= 20 ? "elite" : value >= 13 ? "good" : value >= 6 ? "ok" : "poor";
+  return { value, label, weakFoot, balance, composure, angle, firstTime, pressure };
+}
+function rtChoosePassType(game, carrier, shot) {
+  const style = sideStyle(game, carrier.side);
+  const adaptive = rtAdaptiveTactic(game, carrier.side);
+  const role = rtRoleIntent(carrier);
+  const pressure = rtOpponent(game, carrier.side).filter((e) => rtDist(e, carrier) < 7.5).length;
+  const progress = rtProgressToGoal(carrier.side, carrier.ry);
+  const directStyle = ["Counter", "Long Ball", "Vertical Tiki Taka", "Wing Play"].includes(style);
+  const throughScore = role.through + adaptive.riskBias * 12 + (directStyle ? 10 : 0) + (pressure ? 5 : 0) + (progress > 0.45 ? 6 : 0) - (shot?.chance > 62 ? 8 : 0);
+  const through = throughScore > 11;
+  const cross = ["LW", "RW", "LM", "RM", "LB", "RB"].includes(carrier.role) && Math.abs(carrier.rx - goalCenterX()) > 23 && progress > 0.58;
+  return { through, cross, throughScore, adaptive };
 }
 function rtIsManuallyControlled(game, p) {
   return Boolean(p && p.side === game?.userSide && String(p.id) === String(game?.rt?.selectedId));
@@ -2676,6 +2831,38 @@ function rtKickoffPlayer(game, side) {
   const attackers = pool.filter((p) => ["ST", "CAM", "LW", "RW", "LM", "RM", "CM"].includes(p.role));
   return (attackers.length ? attackers : pool).slice().sort((a, b) => rtRoleRank(b.role) - rtRoleRank(a.role) || b.overall - a.overall)[0]?.id || pool[0]?.id || null;
 }
+
+function rtSetupKickoff(game, side, label = "Kick off") {
+  ["home", "away"].forEach((teamSide) => {
+    const slots = rtFormationFieldSlots(teamSide === "home" ? game.homeFormation : game.awayFormation, teamSide);
+    game.pieces.filter((p) => p.side === teamSide).forEach((p, i) => {
+      if (!p.red && !p.vacant) {
+        const slot = slots[i] || { x: p.rx ?? gridToFieldX(p.x), y: p.ry ?? gridToFieldY(p.y) };
+        p.rx = clampFieldX(slot.x); p.ry = clampFieldY(slot.y);
+        p.x = clamp(Math.round(((p.rx - 4) / (FIELD_W - 8)) * (BOARD_COLS - 1)), 0, BOARD_COLS - 1);
+        p.y = clamp(Math.round(((p.ry - 3) / (FIELD_H - 6)) * (BOARD_ROWS - 1)), 0, BOARD_ROWS - 1);
+        p.homeX = p.rx; p.homeY = p.ry; p.targetX = p.rx; p.targetY = p.ry;
+        p.vx = 0; p.vy = 0; p.manualUntil = 0; p.sprintUntil = 0; p.aiCooldown = rng(1.5, 3.5);
+      }
+    });
+  });
+  const ownerId = rtKickoffPlayer(game, side);
+  const owner = getPiece(game, ownerId);
+  game.ballOwnerId = ownerId;
+  game.turn = game.userSide || side;
+  game.ball = { x: owner?.rx ?? FIELD_W / 2, y: owner?.ry ?? FIELD_H / 2, vx: 0, vy: 0, ownerId, intent: null, free: false };
+  game.rt = { ...(game.rt || {}), lastTouchSide: side, lastTouchId: ownerId, ballState: { label: "KICK OFF", type: "kickoff", text: `${label} ${side === "home" ? game.homeName : game.awayName}`, until: rtLiveUntil(game, 5) } };
+  return owner;
+}
+function rtCheckHalfTimeKickoff(game, prevClock = 0) {
+  const halfTime = MATCH_CLOCK_SECONDS / 2;
+  if (game.extraTimeStarted || game.kickoff?.halftimeDone || prevClock >= halfTime || (game.clockSeconds || 0) < halfTime) return false;
+  const side = game.kickoff?.secondSide || otherSide(game.kickoff?.firstSide || "home");
+  game.kickoff = { ...(game.kickoff || {}), half: 2, halftimeDone: true, secondSide: side };
+  rtSetupKickoff(game, side, "Kick off babak 2");
+  appendLog(game, "⏱️", `Babak 2 dimulai. Kick off bergantian untuk ${side === "home" ? game.homeName : game.awayName}.`, { type: "halfTime", side, team: side === "home" ? game.homeName : game.awayName });
+  return true;
+}
 function makeRealtimeSoccerGame(game) {
   const next = clone(game);
   const setup = (side, formation) => {
@@ -2696,7 +2883,9 @@ function makeRealtimeSoccerGame(game) {
   };
   setup("home", next.homeFormation);
   setup("away", next.awayFormation);
-  const first = rtKickoffPlayer(next, "home");
+  const firstSide = next.kickoff?.firstSide || (Math.random() < 0.5 ? "home" : "away");
+  next.kickoff = { ...(next.kickoff || {}), firstSide, secondSide: next.kickoff?.secondSide || otherSide(firstSide), half: 1, halftimeDone: false };
+  const first = rtKickoffPlayer(next, firstSide);
   const owner = getPiece(next, first) || next.pieces[0];
   next.mode = "realtimeSoccer";
   next.turn = next.userSide;
@@ -2705,30 +2894,15 @@ function makeRealtimeSoccerGame(game) {
   next.maxActions = 99999;
   next.ballOwnerId = owner?.id || null;
   next.ball = { x: owner?.rx ?? FIELD_W / 2, y: owner?.ry ?? FIELD_H / 2, vx: 0, vy: 0, ownerId: owner?.id || null, intent: null, free: false };
-  next.rt = { tick: 0, liveSeconds: 0, selectedId: owner?.side === next.userSide ? owner.id : null, commentary: "Real-time football mode aktif", lastTouchSide: owner?.side || "home", lastTouchId: owner?.id || null, paused: true, viewMode: "normal" };
-  next.history = [{ minute: 1, icon: "⚽", text: `Real-time v14 kick off: ${next.homeName}. Semua pemain bergerak otomatis seperti pertandingan bola.` }, ...(next.history || []).slice(0, 30)];
+  next.rt = { tick: 0, liveSeconds: 0, selectedId: owner?.side === next.userSide ? owner.id : null, commentary: "Real-time football mode aktif", lastTouchSide: owner?.side || firstSide, lastTouchId: owner?.id || null, paused: true, viewMode: "normal" };
+  next.history = [{ minute: 1, icon: "⚽", text: `Real-time v17 kick off: ${firstSide === "home" ? next.homeName : next.awayName}. Babak 2 otomatis untuk ${next.kickoff.secondSide === "home" ? next.homeName : next.awayName}.` }, ...(next.history || []).slice(0, 30)];
   next.lastAction = "Real-time v14 Pro AI Fast Match: movement lebih halus, gaya main lebih terasa, switch dekat bola, keeper rush, tackle tetap punya risiko kartu/cedera.";
   return next;
 }
 function rtResetAfterGoal(game, scoringSide) {
   const restart = otherSide(scoringSide);
-  ["home", "away"].forEach((side) => {
-    const slots = rtFormationFieldSlots(side === "home" ? game.homeFormation : game.awayFormation, side);
-    game.pieces.filter((p) => p.side === side).forEach((p, i) => {
-      if (!p.red && !p.vacant) {
-        const slot = slots[i] || { x: p.rx, y: p.ry };
-        p.rx = clampFieldX(slot.x); p.ry = clampFieldY(slot.y);
-        p.x = clamp(Math.round(((p.rx - 4) / (FIELD_W - 8)) * (BOARD_COLS - 1)), 0, BOARD_COLS - 1);
-        p.y = clamp(Math.round(((p.ry - 3) / (FIELD_H - 6)) * (BOARD_ROWS - 1)), 0, BOARD_ROWS - 1);
-        p.homeX = p.rx; p.homeY = p.ry; p.targetX = p.rx; p.targetY = p.ry; p.manualUntil = 0; p.aiCooldown = rng(2, 4);
-      }
-    });
-  });
-  const ownerId = rtKickoffPlayer(game, restart);
-  const owner = getPiece(game, ownerId);
-  game.ballOwnerId = ownerId;
-  game.ball = { x: owner?.rx ?? FIELD_W / 2, y: owner?.ry ?? FIELD_H / 2, vx: 0, vy: 0, ownerId, intent: null, free: false };
-  game.rt = { ...(game.rt || {}), lastTouchSide: restart, lastTouchId: ownerId };
+  const owner = rtSetupKickoff(game, restart, "Restart setelah gol");
+  if (owner) owner.aiCooldown = rng(1.2, 2.4);
   game.goalPause = { scorerSide: scoringSide, restartSide: restart, score: { ...game.score }, minute: minuteOf(game), text: game.lastAction };
   game.highlights = [{ minute: minuteOf(game), icon: "🥅", text: game.lastAction, score: { ...game.score } }, ...(game.highlights || [])].slice(0, 12);
 }
@@ -2760,11 +2934,27 @@ function rtRestartFromOut(game, type, side, point, reason = "") {
   game.rt = { ...(game.rt || {}), lastTouchSide: side, lastTouchId: taker.id, ballState: { label: "BOLA IN", type: "in", restart: type, text: `${labels[type]} untuk ${taker.teamName}`, until: rtLiveUntil(game, 6) } };
   appendLog(game, icons[type] || "⚽", `Bola OUT${reason ? ` (${reason})` : ""}. ${labels[type]} cepat untuk ${taker.teamName} lewat ${firstName(taker.name)}.`, { type: "out", restart: type, side, team: taker.teamName });
 }
+function rtRestartFromFoul(game, fouled, tackler, reason = "pelanggaran") {
+  if (!fouled || !rtAlive(game, fouled)) return;
+  const side = fouled.side;
+  const point = { x: clampFieldX(fouled.rx), y: clampFieldY(fouled.ry) };
+  const taker = rtNearestFriend(game, side, point) || fouled;
+  taker.rx = clampFieldX(point.x + (side === "home" ? 0.8 : -0.8));
+  taker.ry = clampFieldY(point.y);
+  taker.targetX = taker.rx; taker.targetY = taker.ry;
+  game.ballOwnerId = taker.id;
+  game.ball = { x: taker.rx, y: taker.ry, vx: 0, vy: 0, ownerId: taker.id, intent: null, free: false };
+  game.rt = { ...(game.rt || {}), lastTouchSide: side, lastTouchId: taker.id, ballState: { label: "FREE KICK", type: "foul", text: `Free kick untuk ${taker.teamName} setelah ${reason}`, until: rtLiveUntil(game, 6) } };
+  if (tackler) tackler.aiCooldown = Math.max(tackler.aiCooldown || 0, 1.6);
+  appendLog(game, "🎯", `Free kick untuk ${taker.teamName}. ${firstName(taker.name)} mengambil restart dari titik foul.`, { type: "freeKick", side, team: taker.teamName });
+}
 function rtPassTarget(game, piece, through = false, aim = null) {
   if (!piece || !rtAlive(game, piece)) return null;
   const stick = aim ? rtSanitizeStick(aim) : rtStickDirectionForAction(game, piece);
   const enemies = rtOpponent(game, piece.side);
   const pressure = enemies.filter((e) => rtDist(e, piece) < 7.5).length;
+  const adaptive = rtAdaptiveTactic(game, piece.side);
+  const passerRole = rtRoleIntent(piece);
   const teammates = rtTeam(game, piece.side).filter((p) => p.id !== piece.id && p.role !== "GK");
   const options = teammates.map((p) => {
     const d = Math.max(1, rtDist(piece, p));
@@ -2772,16 +2962,20 @@ function rtPassTarget(game, piece, through = false, aim = null) {
     const laneRisk = rtPassLaneRisk(game, piece, p);
     const marked = enemies.filter((e) => rtDist(e, p) < 5.5).length;
     const receiverGoal = rtProgressToGoal(piece.side, p.ry) * 22;
+    const receiverRole = rtRoleIntent(p);
     const lineBonus = ({ ST: 10, LW: 7, RW: 7, CAM: 8, CM: 5, LM: 4, RM: 4, CDM: 1, LB: -1, RB: -1, CB: -4 })[p.role] || 0;
     const shortSafety = d < 18 ? 8 : d < 30 ? 3 : -2;
-    const throughBonus = through ? Math.max(0, forward) * 0.85 + receiverGoal * 0.4 : Math.min(Math.max(forward, -6), 12) * 0.45;
+    const throughBonus = through ? Math.max(0, forward) * (0.85 + adaptive.riskBias * 0.08) + receiverGoal * 0.4 : Math.min(Math.max(forward, -6), 12) * 0.45;
     const pressureNeed = pressure ? (d < 20 ? 5 : -2) : 0;
     const dx = p.rx - piece.rx;
     const dy = p.ry - piece.ry;
     const stickDot = stick.mag ? rtDotDir(stick.x, stick.y, dx, dy) : 0;
     const stickBonus = stick.mag ? clamp(stickDot, -1, 1) * (through ? 26 : 19) * stick.mag : 0;
     const badBackPass = through && forward < -3 ? -18 : 0;
-    const score = p.overall * 0.18 + p.pass * 0.08 + lineBonus + shortSafety + throughBonus + pressureNeed + stickBonus + badBackPass - laneRisk * 0.85 - marked * 8 - Math.abs(p.rx - piece.rx) * 0.035;
+    const tacticalPass = passerRole.pass * 0.45 + receiverRole.pass * 0.18 + (through ? passerRole.through * 0.52 + receiverRole.through * 0.28 : 0);
+    const protectSafety = adaptive.protectBias > 0.5 && forward < 4 ? 5 : 0;
+    const chaseRisk = adaptive.urgent && forward > 5 ? 7 : 0;
+    const score = p.overall * 0.18 + p.pass * 0.08 + lineBonus + shortSafety + throughBonus + tacticalPass + protectSafety + chaseRisk + pressureNeed + stickBonus + badBackPass - laneRisk * (0.85 + Math.max(0, adaptive.protectBias) * 0.18) - marked * 8 - Math.abs(p.rx - piece.rx) * 0.035;
     return { p, score, laneRisk, d, forward, stickDot };
   }).filter((o) => o.laneRisk < (through ? 31 : 36) || o.d < 12 || (stick.mag && o.stickDot > 0.72))
     .sort((a, b) => b.score - a.score || a.d - b.d);
@@ -2799,6 +2993,8 @@ function rtBestDribbleTarget(game, carrier) {
   ];
   const enemies = rtOpponent(game, carrier.side);
   const style = sideStyle(game, carrier.side);
+  const adaptive = rtAdaptiveTactic(game, carrier.side);
+  const roleIntent = rtRoleIntent(carrier);
   const laneHome = carrier.homeX ?? carrier.rx;
   const scored = candidates.map((c) => {
     const x = clampFieldX(carrier.rx + c.dx);
@@ -2808,7 +3004,9 @@ function rtBestDribbleTarget(game, carrier) {
     const laneDiscipline = -Math.abs(x - laneHome) * (style === "Wing Play" && ["LW", "RW", "LM", "RM"].includes(carrier.role) ? 0.02 : 0.08);
     const centerBonus = carrier.role === "ST" || carrier.role === "CAM" ? -Math.abs(x - goalCenterX()) * 0.08 : 0;
     const sidelinePenalty = (x < 8 || x > 92) ? -7 : 0;
-    return { x, y, score: nearest * 1.4 + goalGain + laneDiscipline + centerBonus + sidelinePenalty };
+    const roleCarry = roleIntent.carry * 0.42 + adaptive.attackBias * 3.6 - adaptive.protectBias * 4.2;
+    const widthBonus = roleIntent.width ? -Math.abs(Math.abs(x - 50) - 28) * 0.045 + Math.abs(roleIntent.width) * 0.11 : 0;
+    return { x, y, score: nearest * 1.4 + goalGain + laneDiscipline + centerBonus + sidelinePenalty + roleCarry + widthBonus };
   }).sort((a, b) => b.score - a.score);
   return scored[0] || { x: carrier.rx, y: carrier.ry + dir * 3 };
 }
@@ -2821,8 +3019,11 @@ function rtShootingWindow(game, carrier) {
   const laneRisk = rtShotLaneRisk(game, carrier);
   const keeper = rtTeam(game, otherSide(carrier.side)).find((p) => p.role === "GK");
   const keeperPos = keeper ? Math.abs(keeper.rx - goalCenterX()) * 0.32 + Math.abs(keeper.ry - rtOwnGoalY(keeper.side)) * 0.22 : 6;
-  const chance = clamp(76 + carrier.shoot * 0.27 + carrier.overall * 0.12 - distGoal * 1.02 - anglePenalty - pressure * 9 - laneRisk * 0.7 - keeperPos, 4, 91);
-  return { can: distGoal < 27 && chance > 42 && laneRisk < 28, chance, laneRisk, distGoal };
+  const quality = rtShotQuality(game, carrier);
+  const adaptive = rtAdaptiveTactic(game, carrier.side);
+  const role = rtRoleIntent(carrier);
+  const chance = clamp(70 + carrier.shoot * 0.27 + carrier.overall * 0.12 + quality.value + role.shoot * 0.18 + adaptive.attackBias * 5.5 - adaptive.protectBias * 4.2 - distGoal * 1.02 - anglePenalty - pressure * 9 - laneRisk * 0.7 - keeperPos, 4, 91);
+  return { can: distGoal < (adaptive.urgent ? 31 : 27) && chance > (adaptive.urgent ? 38 : 42) && laneRisk < (adaptive.urgent ? 34 : 28), chance, laneRisk, distGoal, quality };
 }
 
 function rtLaunchBall(game, piece, targetX, targetY, speed, intent) {
@@ -2830,7 +3031,7 @@ function rtLaunchBall(game, piece, targetX, targetY, speed, intent) {
   const dy = targetY - piece.ry;
   const dist = Math.max(1, Math.hypot(dx, dy));
   game.ballOwnerId = null;
-  game.ball = { x: piece.rx, y: piece.ry, vx: (dx / dist) * speed, vy: (dy / dist) * speed, ownerId: null, free: true, intent: { ...intent, fromId: piece.id, side: piece.side, targetX, targetY } };
+  game.ball = { x: piece.rx, y: piece.ry, vx: (dx / dist) * speed, vy: (dy / dist) * speed, ownerId: null, free: true, intent: { ...intent, fromId: piece.id, side: piece.side, fromX: piece.rx, fromY: piece.ry, startX: piece.rx, startY: piece.ry, targetX, targetY } };
   game.rt = { ...(game.rt || {}), lastTouchSide: piece.side, lastTouchId: piece.id };
 }
 function rtPass(game, piece, target = null, through = false, aim = null) {
@@ -2852,6 +3053,25 @@ function rtPass(game, piece, target = null, through = false, aim = null) {
   piece.energy = clamp((piece.energy || 80) - (through ? 1.4 : 0.9), 0, 100);
   appendLog(game, through ? "🪄" : "🎯", `${firstName(piece.name)} ${through ? "through ball" : "mengoper"} ke ${firstName(t.name)}${stick.mag ? " sesuai arah stick" : ""}.`);
 }
+function rtPointSegmentDistance(px, py, ax, ay, bx, by) {
+  const vx = bx - ax; const vy = by - ay;
+  const len2 = vx * vx + vy * vy || 1;
+  const t = clamp(((px - ax) * vx + (py - ay) * vy) / len2, 0, 1);
+  return Math.hypot(px - (ax + vx * t), py - (ay + vy * t));
+}
+function rtKeeperSaveChance(game, keeper, ball) {
+  if (!keeper || !ball) return 0;
+  const intent = ball.intent || {};
+  const startX = intent.startX ?? intent.fromX ?? ball.x;
+  const startY = intent.startY ?? intent.fromY ?? ball.y;
+  const targetX = intent.targetX ?? ball.x;
+  const targetY = intent.targetY ?? ball.y;
+  const lineDist = rtPointSegmentDistance(keeper.rx, keeper.ry, startX, startY, targetX, targetY);
+  const goalLineFit = Math.abs(keeper.ry - rtOwnGoalY(keeper.side));
+  const reaction = 31 + (keeper.overall || 60) * 0.32 + (keeper.defend || 60) * 0.22 + (keeper.energy || 80) * 0.06;
+  const shotPower = Math.hypot(ball.vx || 0, ball.vy || 0);
+  return clamp(reaction - lineDist * 13.5 - goalLineFit * 0.22 - shotPower * 0.32 - (intent.chance || 55) * 0.34, 3, 88);
+}
 function rtShoot(game, piece, aim = null) {
   if (!piece || !rtAlive(game, piece) || game.ballOwnerId !== piece.id || piece.role === "GK") return;
   const stick = aim ? rtSanitizeStick(aim) : rtStickDirectionForAction(game, piece);
@@ -2864,16 +3084,20 @@ function rtShoot(game, piece, aim = null) {
   const keeper = rtTeam(game, otherSide(piece.side)).find((p) => p.role === "GK");
   const keeperCover = keeper ? Math.max(0, 18 - Math.abs(keeper.rx - goalCenterX()) * 0.7 - Math.abs(keeper.ry - sideOwnGoalY(keeper.side)) * 0.18) : 6;
   const onBalance = stick.mag ? Math.max(0, rtDotDir(stick.x, stick.y, target.x - piece.rx, target.y - piece.ry)) : 0.58;
-  const chance = clamp(72 + piece.shoot * 0.27 + piece.overall * 0.13 + onBalance * 5 - distGoal * 0.92 - anglePenalty - pressure * 8 - laneRisk * 0.55 - keeperCover * 0.85, 5, 90);
+  const quality = rtShotQuality(game, piece, stick);
+  const adaptive = rtAdaptiveTactic(game, piece.side);
+  const role = rtRoleIntent(piece);
+  const chance = clamp(68 + piece.shoot * 0.27 + piece.overall * 0.13 + onBalance * 5 + quality.value + role.shoot * 0.16 + adaptive.attackBias * 4.8 - adaptive.protectBias * 3.5 - distGoal * 0.92 - anglePenalty - pressure * 8 - laneRisk * 0.55 - keeperCover * 0.85, 5, 90);
   const accurate = roll(chance);
-  const spread = accurate ? rng(-3, 3) : pick([-1, 1]) * rng(9, 20);
+  const spreadBase = quality.label === "elite" ? 2 : quality.label === "good" ? 3 : quality.label === "ok" ? 5 : 7;
+  const spread = accurate ? rng(-spreadBase, spreadBase) : pick([-1, 1]) * rng(9, 22 + Math.max(0, Math.round((1 - quality.balance) * 8)));
   const targetX = clamp(target.x + spread, -8, FIELD_W + 8);
   const targetY = piece.side === "home" ? -6 : FIELD_H + 6;
   rtLaunchBall(game, piece, targetX, targetY, 29 + Math.min(11, piece.shoot / 10), { kind: "shot", chance: Math.round(chance), accurate });
   game.stats[piece.side].shots += 1;
   game.stats[piece.side].xg += clamp(chance / 100, 0.03, 0.82);
   piece.energy = clamp((piece.energy || 80) - 5.4, 0, 100);
-  appendLog(game, "🥅", `${firstName(piece.name)} menembak real-time dari ${Math.round(distGoal)}m virtual (${Math.round(chance)}%)${stick.mag ? " sesuai arah stick" : ""}.`);
+  appendLog(game, "🥅", `${firstName(piece.name)} menembak real-time dari ${Math.round(distGoal)}m virtual (${Math.round(chance)}%, quality ${quality.label})${stick.mag ? " sesuai arah stick" : ""}.`);
 }
 function rtTackle(game, tackler, carrier = null, forced = false) {
   carrier = carrier || getPiece(game, game.ballOwnerId);
@@ -2911,7 +3135,8 @@ function rtTackle(game, tackler, carrier = null, forced = false) {
         game.stats[tackler.side].reds += 1;
         appendLog(game, "🟥", `${firstName(tackler.name)} mendapat kuning kedua setelah telat tackle ${firstName(carrier.name)}.`);
       } else appendLog(game, "🟨", `${firstName(tackler.name)} telat menekel ${firstName(carrier.name)}. Kartu kuning.`);
-    } else appendLog(game, "⚠️", `${firstName(tackler.name)} melanggar ${firstName(carrier.name)}. Free kick cepat, bola tetap untuk ${carrier.teamName}.`);
+    } else appendLog(game, "⚠️", `${firstName(tackler.name)} melanggar ${firstName(carrier.name)}.`);
+    rtRestartFromFoul(game, carrier, tackler, isKeeperRush ? "benturan kiper" : "tackle terlambat");
     if (roll(isKeeperRush ? 13 : forced ? 7 : 3)) possibleInjury(game, carrier, isKeeperRush ? "benturan kiper" : "tackle keras");
   }
   return false;
@@ -2929,11 +3154,9 @@ function rtHandleLooseBall(game, dt) {
     const keeper = rtTeam(game, defendingSide).find((p) => p.role === "GK") || rtNearestFriend(game, defendingSide, { x: goalCenterX(), y: sideOwnGoalY(defendingSide) });
     if (inGoal) {
       game.stats[attackingSide].onTarget += 1;
-      const shotChance = ball.intent?.chance ?? 58;
-      const keeperDx = keeper ? Math.abs((keeper.rx || goalCenterX()) - ball.x) : 99;
-      const keeperReady = keeper ? clamp(74 + (keeper.overall || 60) * 0.22 + (keeper.defend || 60) * 0.12 - shotChance * 0.62 - keeperDx * 7.5, 5, 82) : 0;
+      const keeperReady = rtKeeperSaveChance(game, keeper, ball);
       if (keeper && roll(keeperReady)) {
-        rtSetPossession(game, keeper, `🧤 ${firstName(keeper.name)} menepis shot real-time (${Math.round(keeperReady)}%).`);
+        rtSetPossession(game, keeper, `🧤 ${firstName(keeper.name)} membaca trajectory dan menepis shot (${Math.round(keeperReady)}%).`);
         game.stats[defendingSide].saves = (game.stats[defendingSide].saves || 0) + 1;
         return;
       }
@@ -2970,6 +3193,90 @@ function rtHandleLooseBall(game, dt) {
   }
 }
 
+
+function safePick(arr, fallback = null) {
+  return Array.isArray(arr) && arr.length ? arr[rng(0, arr.length - 1)] : fallback;
+}
+function poissonGoals(xg) {
+  const lambda = clamp(Number.isFinite(xg) ? xg : 1.1, 0.05, 4.2);
+  const limit = Math.exp(-lambda);
+  let k = 0;
+  let prod = 1;
+  do { k += 1; prod *= Math.random(); } while (prod > limit && k < 9);
+  return Math.max(0, k - 1);
+}
+function aiHomeAdvantage(home, away, context = {}) {
+  const derby = context.derby || home?.rivalId === away?.id || away?.rivalId === home?.id;
+  const important = context.important || context.competition === "numberOne" || context.competition === "worldCup" || context.stage;
+  // Home edge dibuat kecil agar tidak menjadi bias utama; derby/knockout mengurangi efek kandang.
+  return derby || important ? 0.08 : 0.16;
+}
+function aiStyleAttackBonus(style) {
+  if (style === "All Out Attack") return 0.2;
+  if (style === "High Press") return 0.12;
+  if (style === "Counter") return 0.06;
+  if (style === "Park Bus") return -0.1;
+  return 0;
+}
+function aiStyleDisciplineRisk(style) {
+  if (style === "High Press") return 1.22;
+  if (style === "All Out Attack") return 1.12;
+  if (style === "Park Bus") return 0.88;
+  return 1;
+}
+function aiExpectedGoals(homePower, awayPower, homeStyle = "Balanced", awayStyle = "Balanced", context = {}) {
+  const diff = clamp(homePower - awayPower, -32, 32);
+  const derby = context.derby ? 0.08 : 0;
+  const importantTightness = context.important ? -0.08 : 0;
+  const homeXg = clamp(1.18 + aiHomeAdvantage(context.home, context.away, context) + diff * 0.033 + aiStyleAttackBonus(homeStyle) - aiStyleAttackBonus(awayStyle) * 0.35 + derby + importantTightness, 0.25, 3.3);
+  const awayXg = clamp(1.05 - diff * 0.031 + aiStyleAttackBonus(awayStyle) - aiStyleAttackBonus(homeStyle) * 0.35 + derby + importantTightness, 0.2, 3.1);
+  return { homeXg, awayXg };
+}
+function aiPlayerGoalWeight(player, idx = 0) {
+  const role = player?.role || player?.position || "";
+  const ovr = player?.overall || 65;
+  const attack = (player?.shoot || player?.attack || player?.finishing || ovr) || ovr;
+  let roleWeight = 1;
+  if (["ST", "CF"].includes(role)) roleWeight = 5.2;
+  else if (["LW", "RW", "WF"].includes(role)) roleWeight = 3.9;
+  else if (["CAM", "AM"].includes(role)) roleWeight = 3.4;
+  else if (["CM", "LM", "RM"].includes(role)) roleWeight = 2.1;
+  else if (["CDM", "DM"].includes(role)) roleWeight = 1.15;
+  else if (["LB", "RB", "CB"].includes(role)) roleWeight = 0.38;
+  else if (role === "GK") roleWeight = 0.03;
+  return Math.max(0.01, roleWeight * (0.75 + attack / 100) * (idx < 11 ? 1 : 0.35));
+}
+function weightedPickBy(arr, weightFn) {
+  const items = (arr || []).filter(Boolean);
+  if (!items.length) return null;
+  const weighted = items.map((item, idx) => ({ item, w: Math.max(0, Number(weightFn(item, idx)) || 0) }));
+  const total = weighted.reduce((sum, x) => sum + x.w, 0);
+  if (total <= 0) return safePick(items);
+  let cursor = Math.random() * total;
+  for (const x of weighted) {
+    cursor -= x.w;
+    if (cursor <= 0) return x.item;
+  }
+  return weighted[weighted.length - 1].item;
+}
+function aiPickScorerFromPieces(pieces) {
+  return weightedPickBy((pieces || []).filter((p) => !p.red && !p.vacant), aiPlayerGoalWeight);
+}
+function aiPickScorerFromTeam(team) {
+  return weightedPickBy((team?.players || []).slice(0, 16), aiPlayerGoalWeight);
+}
+function aiMinuteBuckets(goalCount) {
+  const mins = [];
+  for (let i = 0; i < goalCount; i += 1) mins.push(clamp(rng(3, 90) + (roll(12) ? rng(1, 6) : 0), 1, 96));
+  return mins.sort((a, b) => a - b);
+}
+function aiCardChanceForSide(power, style, trailing = false) {
+  return clamp(20 + aiStyleDisciplineRisk(style) * 10 + (trailing ? 5 : 0) + Math.max(0, 72 - power) * 0.18, 16, 48);
+}
+function aiInjuryChanceForSide(power, style) {
+  return clamp(6 + (style === "High Press" ? 3 : 0) + Math.max(0, 72 - power) * 0.12, 4, 18);
+}
+
 function quickSimPower(game, side) {
   const core = (game.pieces || []).filter((p) => p.side === side && !p.red && !p.vacant);
   const avg = avgOverall(core);
@@ -2992,36 +3299,42 @@ function quickSimEventText(game, ev) {
 function makeQuickSimTimeline(game) {
   const hp = quickSimPower(game, "home");
   const ap = quickSimPower(game, "away");
+  const homeStyle = sideStyle(game, "home");
+  const awayStyle = sideStyle(game, "away");
   const important = isImportantEliminationGame(game);
+  const derby = Boolean(game.isDerby);
+  const { homeXg, awayXg } = aiExpectedGoals(hp, ap, homeStyle, awayStyle, { home: { rivalId: game.awayId }, away: { rivalId: game.homeId }, derby, important, competition: game.competition, stage: game.stage });
   const moments = [];
   const add = (min, type, side, extra = {}) => moments.push({ id: `sim-${min}-${type}-${side}-${Math.random().toString(36).slice(2, 6)}`, min, type, side, ...extra });
-  const goalBiasHome = clamp(34 + (hp - ap) * 1.4 + (game.isDerby ? 4 : 0), 18, 55);
-  [9, 17, 24, 33, 41, 52, 61, 70, 78, 86].forEach((min, i) => {
-    const side = roll(goalBiasHome) ? "home" : "away";
-    const attack = side === "home" ? hp : ap;
-    const defend = side === "home" ? ap : hp;
-    const pressure = i > 6 && important ? 8 : 0;
-    const chance = clamp(8 + (attack - defend) * 0.35 + rng(0, 18) + pressure, 4, 32);
-    const player = pick(rtTeam(game, side).filter((p) => p.role !== "GK") || []);
-    if (roll(chance)) add(min, "goal", side, { playerId: player?.playerId, playerName: player?.name });
-    else add(min, roll(46) ? "shot" : "save", side, { playerId: player?.playerId, playerName: player?.name });
-  });
-  [29, 57, 74].forEach((min) => {
-    if (roll(38)) {
-      const side = roll(50) ? "home" : "away";
-      const p = pick(rtTeam(game, side).filter((x) => x.role !== "GK") || []);
-      add(min, roll(9) ? "red" : "yellow", side, { playerId: p?.playerId, pieceId: p?.id, playerName: p?.name });
+  const goalPlan = { home: poissonGoals(homeXg), away: poissonGoals(awayXg) };
+  ["home", "away"].forEach((side) => {
+    const xg = side === "home" ? homeXg : awayXg;
+    const pwr = side === "home" ? hp : ap;
+    const style = side === "home" ? homeStyle : awayStyle;
+    const nonGoalShots = clamp(Math.round(xg * rng(3, 5) + rng(1, 4)), 2, 15);
+    aiMinuteBuckets(goalPlan[side]).forEach((min) => {
+      const player = aiPickScorerFromPieces(rtTeam(game, side));
+      add(min, "goal", side, { playerId: player?.playerId, pieceId: player?.id, playerName: player?.name, xg });
+    });
+    for (let i = 0; i < nonGoalShots; i += 1) {
+      const min = rng(5, 90);
+      const player = aiPickScorerFromPieces(rtTeam(game, side));
+      const onTargetChance = clamp(34 + (pwr - 70) * 0.6 + (style === "All Out Attack" ? 3 : 0), 24, 56);
+      add(min, roll(onTargetChance) ? "save" : "shot", side, { playerId: player?.playerId, pieceId: player?.id, playerName: player?.name, xg });
     }
-  });
-  [36, 68].forEach((min) => {
-    if (roll(14)) {
-      const side = roll(50) ? "home" : "away";
-      const p = pick(rtTeam(game, side).filter((x) => x.role !== "GK") || []);
-      add(min, "injury", side, { playerId: p?.playerId, pieceId: p?.id, playerName: p?.name });
+    if (roll(aiCardChanceForSide(pwr, style, goalPlan[side] < goalPlan[otherSide(side)]))) {
+      const p = safePick(rtTeam(game, side).filter((x) => x.role !== "GK"));
+      add(rng(18, 84), roll(style === "High Press" ? 11 : 7) ? "red" : "yellow", side, { playerId: p?.playerId, pieceId: p?.id, playerName: p?.name });
+    }
+    if (roll(aiInjuryChanceForSide(pwr, style))) {
+      const p = safePick(rtTeam(game, side).filter((x) => x.role !== "GK"));
+      add(rng(25, 82), "injury", side, { playerId: p?.playerId, pieceId: p?.id, playerName: p?.name });
     }
   });
   [60, 72, 82].forEach((min) => {
-    add(min, "sub", roll(50) ? "home" : "away");
+    const tiredHome = rtTeam(game, "home").reduce((s, p) => s + (p.energy || 80), 0) / Math.max(1, rtTeam(game, "home").length);
+    const tiredAway = rtTeam(game, "away").reduce((s, p) => s + (p.energy || 80), 0) / Math.max(1, rtTeam(game, "away").length);
+    add(min, "sub", tiredHome <= tiredAway ? "home" : "away");
   });
   return moments.sort((a, b) => a.min - b.min || a.type.localeCompare(b.type));
 }
@@ -3132,23 +3445,26 @@ function rtAutoDecideWithBall(game, carrier) {
 
   if ((carrier.aiCooldown || 0) > 0) return;
   const shot = rtShootingWindow(game, carrier);
-  const throughIntent = pressureCount > 0 || shot.distGoal < 33 || ["Counter", "Long Ball", "Vertical Tiki Taka"].includes(sideStyle(game, carrier.side));
+  const passChoice = rtChoosePassType(game, carrier, shot);
+  const throughIntent = passChoice.through;
   const passTarget = rtPassTarget(game, carrier, throughIntent);
   const passRisk = passTarget ? rtPassLaneRisk(game, carrier, passTarget) : 99;
   const forward = passTarget ? rtForwardAmount(carrier.side, carrier.ry, passTarget.ry) : 0;
   const inFinalThird = rtProgressToGoal(carrier.side, carrier.ry) > 0.62;
-  const passBias = rtPassDecisionBias(game, carrier, passTarget, shot);
+  const passBias = rtPassDecisionBias(game, carrier, passTarget, shot) + rtRoleIntent(carrier).pass * 0.24 + passChoice.adaptive.protectBias * 4;
   const style = sideStyle(game, carrier.side);
-  const forcedPass = carrier.role === "GK" || pressureCount >= 2 || (pressureCount >= 1 && passRisk < 25) || (passTarget && inFinalThird && forward > 6 && passRisk < 29) || (["Tiki Taka", "Possession", "Vertical Tiki Taka"].includes(style) && passBias > 8);
+  const safeBuildStyle = ["Tiki Taka", "Possession", "Vertical Tiki Taka"].includes(style);
+  const forcedPass = carrier.role === "GK" || pressureCount >= 2 || (pressureCount >= 1 && passRisk < 25) || (passTarget && inFinalThird && forward > 6 && passRisk < (passChoice.adaptive.urgent ? 34 : 29)) || (safeBuildStyle && passBias > (passChoice.adaptive.urgent ? 3 : 8));
+  const shootThreshold = passChoice.adaptive.urgent ? 54 : passChoice.adaptive.protectBias > 0.6 ? 68 : 62;
 
-  if (shot.can && (!passTarget || (shot.chance > 64 && passBias < 11) || (shot.chance > 54 && passRisk > 31) || (pressureCount === 0 && shot.chance > 58))) {
+  if (shot.can && (!passTarget || (shot.chance > shootThreshold && passBias < 11 + passChoice.adaptive.riskBias * 5) || (shot.chance > 54 && passRisk > 31) || (pressureCount === 0 && shot.chance > shootThreshold - 5))) {
     carrier.aiCooldown = 1.05;
     rtShoot(game, carrier);
     return;
   }
   if (passTarget && forcedPass) {
     carrier.aiCooldown = 0.92 + Math.min(0.72, rtDist(carrier, passTarget) / 44);
-    rtPass(game, carrier, passTarget, forward > 8 && passRisk < 27 && passTarget.role !== "CB");
+    rtPass(game, carrier, passTarget, throughIntent && forward > 5 && passRisk < (passChoice.adaptive.urgent ? 35 : 29) && passTarget.role !== "CB");
     return;
   }
 
@@ -3164,8 +3480,14 @@ function rtShouldAutoTackle(game, defender, carrier) {
   const d = rtDist(defender, carrier);
   const role = defender.aiRole || rtPressAssignment(game, defender, carrier);
   const active = role === "press" || role === "cover";
-  const facingOwnGoal = rtForwardAmount(defender.side, defender.ry, carrier.ry) < 4;
-  return active && d < (role === "press" ? 3.6 : 2.8) && facingOwnGoal;
+  const facingOwnGoal = rtForwardAmount(defender.side, defender.ry, carrier.ry) < 5.5;
+  const carrierProgress = rtProgressToGoal(carrier.side, carrier.ry);
+  const dangerZone = carrierProgress > 0.64 || Math.abs(carrier.ry - sideGoalY(carrier.side)) < 23;
+  const style = styleProfile(game, defender.side);
+  const aggressiveStyle = ["High Press", "Gegenpress", "Physical"].includes(sideStyle(game, defender.side));
+  const radius = dangerZone ? 4.15 : aggressiveStyle ? 3.85 : 3.35;
+  const skilledDefender = (defender.defend || 60) + (style?.tackle || 0) * 0.55 > (carrier.dribble || 60) - 2;
+  return facingOwnGoal && d < radius && (active || (dangerZone && skilledDefender));
 }
 
 function tickRealtimeSoccer(game, seconds = REAL_SOCCER_TICK_SECONDS) {
@@ -3173,8 +3495,13 @@ function tickRealtimeSoccer(game, seconds = REAL_SOCCER_TICK_SECONDS) {
   if (!next || next.ended || next.goalPause) return next;
   if (next.mode !== "realtimeSoccer") return tickRealtimeClock(next, seconds);
   if (next.rt?.paused) return next;
-  next.clockSeconds = clamp((next.clockSeconds || 0) + REAL_SOCCER_CLOCK_SECONDS, 0, matchMaxSeconds(next));
+  const prevClockSeconds = next.clockSeconds || 0;
+  next.clockSeconds = clamp(prevClockSeconds + REAL_SOCCER_CLOCK_SECONDS, 0, matchMaxSeconds(next));
   next.rt = { ...(next.rt || {}), tick: (next.rt?.tick || 0) + 1, liveSeconds: ((next.rt?.liveSeconds || 0) + seconds) };
+  if (rtCheckHalfTimeKickoff(next, prevClockSeconds)) {
+    rtFinishIfNeeded(next);
+    return next;
+  }
   recoverMinorInjuries(next);
 
   const ball = next.ball || { x: FIELD_W / 2, y: FIELD_H / 2, vx: 0, vy: 0, free: true, ownerId: null };
@@ -3247,9 +3574,12 @@ function tickRealtimeSoccer(game, seconds = REAL_SOCCER_TICK_SECONDS) {
     rtHandleLooseBall(next, seconds);
   }
 
-  if (next.clockSeconds % 30 < seconds) {
-    const side = getPiece(next, next.ballOwnerId)?.side || next.rt?.lastTouchSide;
-    if (side) next.stats[side].possession += 1;
+  {
+    const side = getPiece(next, next.ballOwnerId)?.side;
+    if (side && next.stats?.[side]) {
+      next.stats[side].possessionSeconds = (next.stats[side].possessionSeconds || 0) + Math.max(0, (next.clockSeconds || 0) - prevClockSeconds);
+      next.stats[side].possession = Math.round(next.stats[side].possessionSeconds);
+    }
   }
   if (next.rt.tick % 22 === 0) {
     next.pieces.forEach((p) => { if (rtAlive(next, p)) p.energy = clamp((p.energy || 80) + 0.08, 0, 100); });
@@ -3947,16 +4277,39 @@ function bestAiAction(game) {
 }
 
 function simulateOtherMatch(home, away, week, fixture = {}) {
-  const hp = teamPower(home) + 5;
+  const hp = teamPower(home);
   const ap = teamPower(away);
   const derby = home.rivalId === away.id || away.rivalId === home.id;
-  const h = Math.max(0, Math.round((hp / ap) * rng(0, 4) - 0.1 + Math.random() + (derby ? Math.random() * 0.4 : 0)));
-  const a = Math.max(0, Math.round((ap / hp) * rng(0, 4) - 0.2 + Math.random() + (derby ? Math.random() * 0.4 : 0)));
+  const important = fixture.competition && fixture.competition !== "league";
+  const { homeXg, awayXg } = aiExpectedGoals(hp, ap, home?.style || "Balanced", away?.style || "Balanced", { home, away, derby, important, competition: fixture.competition, stage: fixture.stage });
+  const h = poissonGoals(homeXg);
+  const a = poissonGoals(awayXg);
   const events = [];
-  for (let i = 0; i < h; i += 1) events.push({ min: rng(1, 90), type: "goal", side: "home", team: home.name, player: pick(home.players.slice(0, 11)).name });
-  for (let i = 0; i < a; i += 1) events.push({ min: rng(1, 90), type: "goal", side: "away", team: away.name, player: pick(away.players.slice(0, 11)).name });
-  events.sort((x, y) => x.min - y.min);
-  return { week, homeId: home.id, awayId: away.id, home: home.name, away: away.name, homeGoals: h, awayGoals: a, events, derby, competition: fixture.competition || "league", leagueKey: fixture.leagueKey || home.leagueKey, cupName: fixture.cupName, stage: fixture.stage, group: fixture.group, matchKey: fixture.key };
+  aiMinuteBuckets(h).forEach((min) => {
+    const player = aiPickScorerFromTeam(home);
+    events.push({ min, type: "goal", side: "home", team: home.name, player: player?.name || "Pemain", playerId: player?.id, xg: Number(homeXg.toFixed(2)) });
+  });
+  aiMinuteBuckets(a).forEach((min) => {
+    const player = aiPickScorerFromTeam(away);
+    events.push({ min, type: "goal", side: "away", team: away.name, player: player?.name || "Pemain", playerId: player?.id, xg: Number(awayXg.toFixed(2)) });
+  });
+  const cardSides = ["home", "away"];
+  cardSides.forEach((side) => {
+    const team = side === "home" ? home : away;
+    const power = side === "home" ? hp : ap;
+    const style = team?.style || "Balanced";
+    const trailing = side === "home" ? h < a : a < h;
+    if (roll(aiCardChanceForSide(power, style, trailing) * 0.45)) {
+      const p = safePick((team.players || []).slice(0, 11).filter((x) => x.role !== "GK"));
+      events.push({ min: rng(12, 89), type: roll(style === "High Press" ? 8 : 5) ? "red" : "yellow", side, team: team.name, player: p?.name || "Pemain", playerId: p?.id });
+    }
+    if (roll(aiInjuryChanceForSide(power, style) * 0.35)) {
+      const p = safePick((team.players || []).slice(0, 11).filter((x) => x.role !== "GK"));
+      events.push({ min: rng(20, 88), type: "injury", side, team: team.name, player: p?.name || "Pemain", playerId: p?.id });
+    }
+  });
+  events.sort((x, y) => x.min - y.min || String(x.type).localeCompare(String(y.type)));
+  return { week, homeId: home.id, awayId: away.id, home: home.name, away: away.name, homeGoals: h, awayGoals: a, events, derby, xg: { home: Number(homeXg.toFixed(2)), away: Number(awayXg.toFixed(2)) }, competition: fixture.competition || "league", leagueKey: fixture.leagueKey || home.leagueKey, cupName: fixture.cupName, stage: fixture.stage, group: fixture.group, matchKey: fixture.key };
 }
 function resultFromGame(game, week) {
   return { week, homeId: game.homeId, awayId: game.awayId, home: game.homeName, away: game.awayName, homeGoals: game.score.home, awayGoals: game.score.away, events: game.events || [], derby: game.isDerby, stats: game.stats, penalty: game.penalty, extraTime: Boolean(game.extraTimeStarted), competition: game.competition || "league", leagueKey: game.leagueKey, cupName: game.cupName, stage: game.stage, group: game.group, matchKey: game.matchKey };
@@ -4075,11 +4428,21 @@ function runQaDebug(teams, market, fixtureCalendar, week, competitionState) {
   const dupPlayers = playerIds.length - new Set(playerIds).size;
   const marketIds = (market || []).map((p) => p.id);
   const dupMarket = marketIds.length - new Set(marketIds).size;
-  const marketOwned = (market || []).filter((p) => p.ownerTeamId && teams.some((t) => (t.players || []).some((x) => x.id === p.id))).length;
+  const ownedIds = new Set(playerIds);
+  const marketOwned = (market || []).filter((p) => p.ownerTeamId && ownedIds.has(p.id)).length;
   const missingLeague = teams.filter((t) => !t.leagueKey).length;
+  const shortSquads = teams.filter((t) => (t.players || []).length < 18).length;
+  const overSquads = teams.filter((t) => (t.players || []).length > 34).length;
+  const badBudgets = teams.filter((t) => !Number.isFinite(Number(t.budget))).length;
+  const legacyInjuryFields = teams.flatMap((t) => t.players || []).filter((p) => Object.prototype.hasOwnProperty.call(p, "injuryWeeks")).length;
+  const invalidAvailability = teams.flatMap((t) => t.players || []).filter((p) => Number(p.injuredWeeks || 0) < 0 || Number(p.bannedWeeks || 0) < 0).length;
   const emptyWeeks = (fixtureCalendar || []).filter((w) => !w?.length).length;
+  const avgBudget = Math.round(teams.reduce((sum, t) => sum + Number(t.budget || 0), 0) / Math.max(1, teams.length));
+  const avgWage = Math.round(teams.reduce((sum, t) => sum + teamWeeklyWage(t), 0) / Math.max(1, teams.length));
+  const transferValueSpread = (market || []).length ? `${money(Math.min(...market.map((p) => p.value || 0)))} - ${money(Math.max(...market.map((p) => p.value || 0)))}` : "kosong";
   const no1 = competitionState?.numberOne;
-  return { week, teams: teams.length, dupPlayers, dupMarket, marketOwned, missingLeague, emptyWeeks, numberOneStage: no1?.stage || "waiting", status: dupPlayers || dupMarket || marketOwned || missingLeague ? "Perlu cek" : "OK" };
+  const problems = dupPlayers + dupMarket + marketOwned + missingLeague + shortSquads + badBudgets + legacyInjuryFields + invalidAvailability;
+  return { week, teams: teams.length, players: playerIds.length, dupPlayers, dupMarket, marketOwned, missingLeague, shortSquads, overSquads, badBudgets, legacyInjuryFields, invalidAvailability, emptyWeeks, avgBudget: money(avgBudget), avgWeeklyWage: money(avgWage), transferValueSpread, numberOneStage: no1?.stage || "waiting", status: problems ? "Perlu cek" : "OK" };
 }
 function runBalanceSimulator(teams, rounds = 500) {
   const sample = [];
@@ -4647,18 +5010,18 @@ function FootballManager() {
   const applyLoadedData = useCallback((data, source = "save") => {
     if (!data?.teams || !Array.isArray(data.teams)) { notify("File save tidak valid.", "error"); return; }
     setCompetition("managerWorld");
-    const loadedFacilities = data.facilities || { stadium: 1, training: 1, academy: 1, medical: 1, merchandise: 1, sponsor: 1 };
+    const loadedFacilities = { ...defaultFacilities(), ...(data.facilities || {}) };
     const loadedSeason = data.season || 1;
     const migratedTeams = ensureUserAcademyInTeams(data.teams, loadedSeason, loadedFacilities.academy || 1, 6);
     const hadNoAcademy = !academyPlayers((data.teams || []).find((t) => t.id === MY_TEAM_ID)).length;
     setTeams(migratedTeams); setWeek(data.week || 1); setSeason(loadedSeason); setFixtureCalendar(data.fixtureCalendar || buildLeagueFixtures(migratedTeams, loadedSeason)); setCompetitionState(data.competitionState || initialCompetitionState(loadedSeason)); setSeasonHistory(data.seasonHistory || []); setCash(Number(data.cash ?? INITIAL_CASH)); setFormation(data.formation || "4-3-3");
     setTrainingPlan(data.trainingPlan || "balanced"); setFacilities(loadedFacilities);
-    setSeasonStats(data.seasonStats || { homeWins: 0, derbyWins: 0, goals: 0, youthDeveloped: 0 }); setClaimed(data.claimed || []);
+    setSeasonStats({ ...defaultSeasonStats(), ...(data.seasonStats || {}) }); setClaimed(data.claimed || []);
     setMarket(data.market ? cleanMarket(data.market, migratedTeams) : makeTransferMarket(migratedTeams, loadedFacilities.academy || 1)); setLog(data.log || []); setManager(data.manager || { name: "Coach Arjuna", reputation: 1, boardTrust: 70, fanTrust: 70 });
     setStoryLog(data.storyLog || []); setWorldNews(hadNoAcademy ? [{ id: `academy-migration-${Date.now()}`, week: data.week || 1, tag: "Youth Intake", icon: "🌱", title: "Akademi membuka intake baru", body: "Save lama tidak punya pemain akademi. Sistem baru otomatis menambahkan youth academy agar tombol Panggil ke Skuad Utama muncul." }, ...(data.worldNews || [])].slice(0, 80) : (data.worldNews || [])); setLineupOverrides(data.lineupOverrides || {}); setHelpMode(Boolean(data.helpMode)); setAiDifficulty(data.aiDifficulty || "Normal");
     setSelectedClubId(data.selectedClubId || MY_TEAM_ID); setSelectedCoachKey(data.selectedCoachKey || "balanced"); setPendingTransfers(data.pendingTransfers || []); setTransferActionWeek(data.transferActionWeek || null);
     setScoutQueue(data.scoutQueue || []); setScoutUsed(0); setActive(null); setPreMatch(null); setSelectedId(null); setSelectedPlayer(null); setGameStarted(true); setTab("dashboard");
-    notify(source === "file" ? "Save file berhasil dimuat." : "Save manual berhasil dimuat.", "success");
+    notify(`${source === "file" ? "Save file" : "Save manual"} berhasil dimuat${data.migratedFrom && data.migratedFrom !== SAVE_VERSION ? ` + dimigrasikan dari v${data.migratedFrom}` : ""}.`, "success");
   }, [notify]);
 
   const startNewCareer = useCallback(() => {
@@ -4718,7 +5081,7 @@ function FootballManager() {
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      try { applyLoadedData(JSON.parse(String(reader.result || "{}")), "file"); }
+      try { applyLoadedData(migrateSave(JSON.parse(String(reader.result || "{}"))), "file"); }
       catch { notify("Gagal membaca file save JSON.", "error"); }
     };
     reader.onerror = () => notify("Gagal membuka file save.", "error");
@@ -5342,7 +5705,7 @@ function FootballManager() {
       {tab === "objectives" && <ObjectivesTab objectives={objectives} ctx={objectiveCtx} claimed={claimed} startFriendly={startFriendly} />}
       {tab === "clubs" && <ClubsTab teams={teams} />}
       {tab === "aiGrowth" && <AIGrowthTab teams={teams} worldNews={worldNews} week={week} />}
-      {tab === "debug" && <DebugTab report={debugReport} runQa={() => setDebugReport(runQaDebug(teams, market, fixtureCalendar, week, competitionState))} runBalance={() => setDebugReport(runBalanceSimulator(teams, 500))} />}
+      {tab === "debug" && <DebugTab report={debugReport} runQa={() => setDebugReport(runQaDebug(teams, market, fixtureCalendar, week, competitionState))} runBalance={() => setDebugReport(runBalanceSimulator(teams, 1000))} />}
     </main>
   </div>;
 }
@@ -5453,9 +5816,22 @@ function LanMultiplayerScreen({ onBack, helpMode, notify }) {
   useEffect(() => {
     if (!roomCode) return undefined;
     loadRoom(roomCode);
-    const timer = window.setInterval(() => loadRoom(roomCode), 1100);
+    const timer = window.setInterval(() => loadRoom(roomCode), visibleGame ? 300 : 1100);
     return () => window.clearInterval(timer);
-  }, [roomCode, loadRoom]);
+  }, [roomCode, loadRoom, Boolean(visibleGame)]);
+  useEffect(() => {
+    if (!roomCode || !isHost || !visibleGame || visibleGame.mode !== "realtimeSoccer" || visibleGame.ended || visibleGame.goalPause || visibleGame.rt?.paused) return undefined;
+    const timer = window.setInterval(async () => {
+      try {
+        const next = tickRealtimeSoccer({ ...visibleGame, userSide: "home" }, 0.34);
+        const data = await lanApi(`/rooms/${roomCode}/sync`, { clientId, baseRevision: room?.match?.revision || 0, actionType: "hostTick", game: { ...next, userSide: "home" }, eventText: "Host authoritative tick." });
+        setRoom(data.room);
+      } catch (e) {
+        if (String(e?.message || "").includes("Sinkron") || String(e?.message || "").includes("Room sudah berubah")) loadRoom(roomCode);
+      }
+    }, 340);
+    return () => window.clearInterval(timer);
+  }, [roomCode, isHost, visibleGame?.clockSeconds, visibleGame?.rt?.paused, visibleGame?.ended, visibleGame?.goalPause, room?.match?.revision]);
   useEffect(() => {
     if (!visibleGame || visibleGame.ended || visibleGame.goalPause || visibleGame.turn !== side) return;
     const carrier = getPiece(visibleGame, visibleGame.ballOwnerId);
@@ -5510,9 +5886,9 @@ function LanMultiplayerScreen({ onBack, helpMode, notify }) {
     if (visibleGame.mode !== "realtimeSoccer" && visibleGame.turn !== side && action.type !== "resumeGoal") { notify?.("Belum giliran kamu.", "warn"); return; }
     const next = visibleGame.mode === "realtimeSoccer" ? applyRealtimeAction({ ...visibleGame, userSide: side }, action) : applyAction(visibleGame, action);
     try {
-      const data = await lanApi(`/rooms/${roomCode}/sync`, { clientId, game: { ...next, userSide: "home" }, eventText: next.lastAction || "Aksi match LAN." });
+      const data = await lanApi(`/rooms/${roomCode}/sync`, { clientId, baseRevision: room?.match?.revision || 0, actionType: action.type, playerSide: side, game: { ...next, userSide: "home" }, eventText: next.lastAction || "Aksi match LAN." });
       setRoom(data.room);
-    } catch (e) { setError(e.message); }
+    } catch (e) { setError(e.message); if (e?.message?.includes("Sinkron") || e?.message?.includes("Room sudah berubah")) loadRoom(roomCode); }
   };
 
   if (visibleGame) {
@@ -5919,7 +6295,10 @@ function MatchSummary({ game, finishWeek }) {
   const moments = keyMomentText(game);
   const homePass = game.stats.home.passes ? Math.round((game.stats.home.passOk / game.stats.home.passes) * 100) : 0;
   const awayPass = game.stats.away.passes ? Math.round((game.stats.away.passOk / game.stats.away.passes) * 100) : 0;
-  return <div className="matchSummary"><b>🏁 Match Summary</b><h3>{game.homeName} {game.score.home} - {game.score.away} {game.awayName}</h3><p>MVP: {mvp?.role} {firstName(mvp?.name)} · OVR {mvp?.overall}</p><div className="summaryStats"><span>xG {Math.round(game.stats.home.xg * 100) / 100} - {Math.round(game.stats.away.xg * 100) / 100}</span><span>Pass {homePass}% - {awayPass}%</span><span>Shots {game.stats.home.shots} - {game.stats.away.shots}</span></div><div className="summaryMoments">{moments.map((h, i) => <small key={`${h.minute}-${i}`}>{h.minute}' {h.icon} {h.text}</small>)}</div><button className="primary full" onClick={finishWeek}>{game.friendly ? "Keluar Friendly" : "Selesaikan Pekan"}</button></div>;
+  const posTotal = (game.stats.home.possessionSeconds || game.stats.home.possession || 0) + (game.stats.away.possessionSeconds || game.stats.away.possession || 0);
+  const homePos = posTotal ? Math.round(((game.stats.home.possessionSeconds || game.stats.home.possession || 0) / posTotal) * 100) : 50;
+  const awayPos = 100 - homePos;
+  return <div className="matchSummary"><b>🏁 Match Summary</b><h3>{game.homeName} {game.score.home} - {game.score.away} {game.awayName}</h3><p>MVP: {mvp?.role} {firstName(mvp?.name)} · OVR {mvp?.overall}</p><div className="summaryStats"><span>xG {Math.round(game.stats.home.xg * 100) / 100} - {Math.round(game.stats.away.xg * 100) / 100}</span><span>Poss {homePos}% - {awayPos}%</span><span>Pass {homePass}% - {awayPass}%</span><span>Shots {game.stats.home.shots} - {game.stats.away.shots}</span><span>Saves {game.stats.home.saves || 0} - {game.stats.away.saves || 0}</span></div><div className="summaryMoments">{moments.map((h, i) => <small key={`${h.minute}-${i}`}>{h.minute}' {h.icon} {h.text}</small>)}</div><button className="primary full" onClick={finishWeek}>{game.friendly ? "Keluar Friendly" : "Selesaikan Pekan"}</button></div>;
 }
 function InboxTab({ items, startMatch, setTab }) {
   return <Section title="Inbox Manager" sub="Inbox sekarang menjadi pusat keputusan cepat: match, youth, kontrak, offer, scout, meeting story, latihan, dan kalender."><div className="inboxGrid">{items.map((it, i) => <Card key={`${it.title}-${i}`} className={`inboxCard ${it.actionTab ? "clickable" : ""}`}><strong>{it.icon}</strong><h3>{it.title}</h3><p>{it.body}</p>{it.actionTab && <button className="ghost full" onClick={() => setTab(it.actionTab)}>{it.actionLabel || "Buka"}</button>}</Card>)}<Card className="inboxCard action"><strong>⚽</strong><h3>Match Week</h3><p>Setelah membaca inbox, lanjut ke pre-match dan atur formasi sebelum mulai.</p><button className="primary full" onClick={startMatch}>Main Pekan</button></Card></div></Section>;
@@ -5975,7 +6354,14 @@ function Board({ game, selectedId, setSelectedId, runCells, passes, throughs, ta
   }
   return <div className="board" style={{ gridTemplateColumns: `repeat(${BOARD_COLS}, 1fr)`, gridTemplateRows: `repeat(${BOARD_ROWS}, minmax(28px, 1fr))`, aspectRatio: `${BOARD_COLS}/${BOARD_ROWS}` }}>{cells}</div>;
 }
-function StatsBox({ game }) { return <div className="statsBox"><div><b>{game.stats.home.shots}</b><span>Shots</span><b>{game.stats.away.shots}</b></div><div><b>{game.stats.home.onTarget}</b><span>On Target</span><b>{game.stats.away.onTarget}</b></div><div><b>{Math.round(game.stats.home.xg * 100) / 100}</b><span>xG</span><b>{Math.round(game.stats.away.xg * 100) / 100}</b></div><div><b>{game.stats.home.fouls}</b><span>Fouls</span><b>{game.stats.away.fouls}</b></div><div><b>{game.stats.home.corners}</b><span>Corners</span><b>{game.stats.away.corners}</b></div></div>; }
+function StatsBox({ game }) {
+  const homeSec = game.stats.home.possessionSeconds || game.stats.home.possession || 0;
+  const awaySec = game.stats.away.possessionSeconds || game.stats.away.possession || 0;
+  const total = homeSec + awaySec;
+  const homePos = total ? Math.round((homeSec / total) * 100) : 50;
+  const awayPos = 100 - homePos;
+  return <div className="statsBox"><div><b>{game.stats.home.shots}</b><span>Shots</span><b>{game.stats.away.shots}</b></div><div><b>{game.stats.home.onTarget}</b><span>On Target</span><b>{game.stats.away.onTarget}</b></div><div><b>{Math.round(game.stats.home.xg * 100) / 100}</b><span>xG</span><b>{Math.round(game.stats.away.xg * 100) / 100}</b></div><div><b>{homePos}%</b><span>Possession</span><b>{awayPos}%</b></div><div><b>{game.stats.home.saves || 0}</b><span>Saves</span><b>{game.stats.away.saves || 0}</b></div><div><b>{game.stats.home.fouls}</b><span>Fouls</span><b>{game.stats.away.fouls}</b></div><div><b>{game.stats.home.corners}</b><span>Corners</span><b>{game.stats.away.corners}</b></div></div>;
+}
 
 function SquadTab({ team, selected, setSelected, sell, listLoan, kickPlayer, extendContract, checkPotential, respondOffer }) {
   const [search, setSearch] = useState("");
@@ -6265,7 +6651,7 @@ function AIGrowthTab({ teams, worldNews, week }) {
 
 
 function DebugTab({ report, runQa, runBalance }) {
-  return <Section title="QA / Debug Panel" sub="Panel internal untuk cek long career: duplicate player, market aneh, week state, fixture kosong, dan balancing simulator 500 match.">
-    <div className="cardsGrid"><Card><h3>Cek Data Career</h3><p className="muted">Gunakan setelah transfer/season rollover untuk memastikan market tidak duplicate dan fixture tidak mentok.</p><button className="primary" onClick={runQa}>Run QA</button></Card><Card><h3>Balancing Simulator</h3><p className="muted">Simulasi 500 pertandingan AI untuk melihat rata-rata gol, draw rate, dan home win rate.</p><button className="primary" onClick={runBalance}>Run 500 Match</button></Card><Card><h3>Hasil</h3>{report ? <div className="infoGrid">{Object.entries(report).map(([k, v]) => <React.Fragment key={k}><span>{k}</span><b>{String(v)}</b></React.Fragment>)}</div> : <p className="muted">Belum dijalankan.</p>}</Card></div>
+  return <Section title="QA / Debug Panel" sub="Panel internal untuk cek career, migration, economy, balancing simulator 1000 match, dan seed debug replay.">
+    <div className="cardsGrid compactQaGrid"><Card><h3>Cek Data Career</h3><p className="muted">Gunakan setelah transfer/season rollover untuk memastikan market tidak duplicate dan fixture tidak mentok.</p><button className="primary" onClick={runQa}>Run QA</button></Card><Card><h3>Balancing Simulator</h3><p className="muted">Simulasi 500 pertandingan AI untuk melihat rata-rata gol, draw rate, dan home win rate.</p><button className="primary" onClick={runBalance}>Run 1000 Match</button></Card><Card><h3>Hasil</h3>{report ? <><span className="qaBadge">QA {report.status}</span><div className="infoGrid">{Object.entries(report).map(([k, v]) => <React.Fragment key={k}><span>{k}</span><b>{String(v)}</b></React.Fragment>)}</div></> : <p className="muted">Belum dijalankan.</p>}</Card></div>
   </Section>;
 }
