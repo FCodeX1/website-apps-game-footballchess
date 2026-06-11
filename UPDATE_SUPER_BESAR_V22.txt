@@ -1,0 +1,52 @@
+UPDATE SUPER BESAR V22 — XPANCA FAKHRI
+
+Status build:
+- npm run build: OK
+- npm run qa:static: OK
+- npm run qa:full: OK
+
+Perubahan utama:
+1. Menu dirapihkan menjadi grup/submenu:
+   - Utama, Match, Klub, Dunia, Tools.
+   - Tampilan lebih compact untuk mobile, tidak lagi satu bar panjang.
+
+2. Simulasi manager saat play dibuat lebih smooth:
+   - Quick Sim frame dipercepat dari 900ms ke 150ms.
+   - Bidak dan bola memiliki motion flow otomatis di pitch simulasi.
+   - CSS transition left/top/transform ditambah agar pergerakan tidak patah.
+
+3. Berita diperluas dan tidak repetitif:
+   - Template baru: Breaking Chat, Facility Watch, Derby Signal, Market Pulse, Tactical Lab, Press Room, Global Clubs.
+   - Story impact masuk ke world news supaya keputusan terasa hidup.
+
+4. Meeting manual diubah menjadi bulanan:
+   - Meeting story hanya bisa 1x per 4 pekan game.
+   - Inbox dan Story Tab sudah memakai aturan bulanan.
+
+5. Unexpected event besar:
+   - Tambah 60+ event dadakan berbasis chat.
+   - Speaker chat: CEO, Direktur Stadion, Dokter, Kapten, Reporter, Fans, Sponsor, Agen, Manager Rival, Staff, dan lainnya.
+   - Pilihan event bisa memengaruhi board/fans/reputasi/kas/fasilitas/rivalitas/market/news.
+
+6. Fasilitas ikut terdampak event:
+   - Keyword pilihan seperti stadion, academy/youth, training/latihan, medical/recovery, merchandise/jersey, sponsor bisa memicu upgrade/impact fasilitas.
+
+7. Data dipisah agar mudah update:
+   - src/data/navigation.js
+   - src/data/unexpectedEvents.js
+   - src/data/realWorldData.js
+
+8. Real-world pack:
+   - Tambah preset manager dunia nyata.
+   - Career seed memakai 48 klub real-world dari Inggris, Spanyol, Italia, Jerman, Prancis/Paris, Arab Saudi, dan Indonesia.
+   - LAN club list diperluas.
+   - Roster career tetap digenerate dan diseimbangkan supaya fair dalam engine game. Untuk full roster real-time lengkap semua pemain, perlu integrasi database/API roster resmi atau file roster manual berlisensi.
+
+9. Cleanup proyek:
+   - File legacy/backup lama dibersihkan.
+   - QA script diperbarui untuk V22.
+
+Catatan:
+- Build production tersedia di folder dist.
+- Untuk menjalankan lokal: npm install lalu npm run dev.
+- Untuk Netlify/Vercel, upload project ini atau deploy dari repository; dist sudah tersedia setelah build.

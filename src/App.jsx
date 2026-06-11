@@ -1,4 +1,7 @@
 import React from "react";
+import { NAV_GROUPS } from "./data/navigation.js";
+import { EXTRA_MANAGER_EVENTS } from "./data/unexpectedEvents.js";
+import { EXTRA_COACH_PRESETS, EXTRA_LAN_REAL_CLUBS, REAL_WORLD_CLUBS, REAL_WORLD_SQUAD_SEEDS } from "./data/realWorldData.js";
 const { useCallback, useEffect, useMemo, useState } = React;
 
 const MY_TEAM_ID = 1;
@@ -12,7 +15,7 @@ const SHOT_SIDE_RANGE = 2;
 const SKILL_SHOT_RANGE_BONUS = 1;
 const INITIAL_CASH = 50000;
 const SAVE_KEY = "bola-catur-arena-career-v6";
-const SAVE_VERSION = 20;
+const SAVE_VERSION = 22;
 const SAVE_FILE_NAME = "bola-catur-arena-save.json";
 const COMPETITIONS = {
   liga48: { key: "liga48", title: "Career 4 Liga", subtitle: "Mulai dari Liga Championship, promosi ke Liga 3, Liga 2, lalu Liga 1.", badge: "Multi Season" },
@@ -20,7 +23,7 @@ const COMPETITIONS = {
 };
 const CAREER_START_DATE = new Date(2026, 7, 8); // 8 Agustus 2026, sengaja stabil agar calendar selalu konsisten.
 const GAME_COMPETITIONS = [
-  { key: "league", name: "Liga Utama", icon: "🏆", scope: "Domestik", weeks: "Setiap pekan", prize: 0, desc: "Kompetisi utama 48 klub, home/away." },
+  { key: "league", name: "Liga Utama", icon: "🏆", scope: "Domestik", weeks: "Setiap pekan", prize: 0, desc: "Kompetisi utama modular: seed klub real-world, home/away." },
   { key: "domesticCup", name: "National Cup", icon: "🏅", scope: "Domestik", weeks: "8, 16, 24, 32", prize: 45000, desc: "Piala gugur domestik, rotasi skuad sangat berguna." },
   { key: "leagueCup", name: "League Cup", icon: "🏵️", scope: "Domestik", weeks: "20, 42, 58", prize: 42000, desc: "Cup tambahan untuk rotasi pemain cadangan." },
   { key: "superCup", name: "Super Cup", icon: "⚡", scope: "One-off", weeks: "60", prize: 90000, desc: "Laga besar akhir musim untuk klub performa terbaik." },
@@ -48,6 +51,7 @@ const COACH_PRESETS = [
   { key: "youth", name: "Bima Akademi", style: "Youth Builder", icon: "🌱", boardTrust: 68, fanTrust: 72, reputation: 1, desc: "Cocok untuk membesarkan pemain muda dan hidden potential." },
   { key: "attacker", name: "Raka Offensif", style: "Attacking", icon: "🔥", boardTrust: 64, fanTrust: 78, reputation: 1, desc: "Fans senang, risiko kebobolan lebih tinggi." },
   { key: "defensive", name: "Damar Pragmatic", style: "Defensive", icon: "🧱", boardTrust: 76, fanTrust: 63, reputation: 1, desc: "Aman, compact, cocok untuk skuad murah." },
+  ...EXTRA_COACH_PRESETS,
 ];
 
 const LEAGUES = [
@@ -74,10 +78,11 @@ function transferWindowLabel(week) {
   const w = TRANSFER_WINDOWS.find((x) => week >= x.from && week <= x.to);
   return w ? `${w.name} (Pekan ${w.from}-${w.to})` : "Transfer window tutup";
 }
-function initialLeagueKeyByIndex(idx) {
-  if (idx < TEAMS_PER_LEAGUE) return "liga1";
-  if (idx < TEAMS_PER_LEAGUE * 2) return "liga2";
-  if (idx < TEAMS_PER_LEAGUE * 3) return "liga3";
+function initialLeagueKeyByIndex(idx, totalTeams = CLUB_DATA.length) {
+  const perLeague = Math.max(TEAMS_PER_LEAGUE, Math.ceil(totalTeams / LEAGUE_ORDER.length));
+  if (idx < perLeague) return "liga1";
+  if (idx < perLeague * 2) return "liga2";
+  if (idx < perLeague * 3) return "liga3";
   return "championship";
 }
 function softOverallForLeague(pos, leagueKey, idx = 0) {
@@ -435,6 +440,13 @@ function broadRandomNews(teams, week, season) {
     { tag: "Scout Viral", icon: "🔭", title: `Talenta tersembunyi terlihat di pekan ${week}`, body: `Beberapa scout melaporkan pemain U21 berpotensi tinggi. 85+ tetap langka, jadi kabar seperti ini patut ditunggu.` },
     { tag: "Taktik Dunia", icon: "📊", title: `Tren ${pick(AI_STYLE_POOL)} sedang naik`, body: `Klub AI dapat mengubah gaya main setelah rentetan hasil buruk atau momentum bagus.` },
     { tag: "Finansial", icon: "💼", title: `Board klub mulai menghitung wage`, body: `Budget tidak bisa membesar liar karena gaji mingguan dan batas liga sekarang aktif.` },
+    { tag: "Breaking Chat", icon: "💬", title: `${pick(["CEO", "Fans", "Agen", "Reporter", "Kapten"])} mengirim pesan mendadak`, body: `Story event sekarang punya lebih dari 50 skenario chat. Pilihan salah bisa melebar ke fasilitas, kas, morale, dan headline.` },
+    { tag: "Facility Watch", icon: "🏗️", title: `${t.name} mengevaluasi fasilitas`, body: `Stadion, medical, academy, sponsor, merchandise, dan training bisa naik/turun dampaknya dari keputusan bulanan.` },
+    { tag: "Derby Signal", icon: "🔥", title: `Rivalitas lokal mulai ramai`, body: `Media mencari kalimat panas. Jawaban manager bisa membuat derby berikutnya lebih keras, viral, dan menguntungkan fans.` },
+    { tag: "Market Pulse", icon: "📈", title: `Nilai pemain muda bergerak`, body: `${firstName(p?.name)} dan beberapa U21 lain dipantau karena potensi. Scout report lebih penting dari sekadar OVR.` },
+    { tag: "Tactical Lab", icon: "♟️", title: `Simulasi manager makin detail`, body: `Bidak sekarang bergerak lebih hidup di pitch simulasi; stamina, shape, dan momentum terlihat dari broadcast.` },
+    { tag: "Press Room", icon: "🎙️", title: `Konferensi pers bulan ini ditunggu`, body: `Meeting manual dibatasi 1x per bulan game agar keputusan lebih berat dan tidak repetitif.` },
+    { tag: "Global Clubs", icon: "🌍", title: `Database klub real-world masuk career`, body: `Klub top Inggris, Spanyol, Italia, Jerman, Prancis/Paris, Arab Saudi, dan Indonesia tersedia sebagai seed modular.` },
   ];
   return { id: `broad-${season}-${week}-${Math.random().toString(36).slice(2)}`, week, season, ...pick(templates) };
 }
@@ -495,6 +507,10 @@ const CLUB_DATA = [
   [48, "Probolinggo Comets", "Probolinggo", "#9b5de5", 24500, "Chaos"],
 ];
 
+const CAREER_CLUB_CHOICES = (Array.isArray(REAL_WORLD_CLUBS) && REAL_WORLD_CLUBS.length
+  ? REAL_WORLD_CLUBS.map((c, idx) => [c.id ?? idx + 1, c.name, c.city || `${c.country || "World"} · ${c.league || "Real League"}`, c.color, c.fans || 30000, c.style])
+  : CLUB_DATA);
+
 
 const LAN_REAL_CLUBS = [
   { key: "man-city", name: "Manchester City", country: "Inggris", color: "#6cabdd", style: "Possession" },
@@ -527,6 +543,7 @@ const LAN_REAL_CLUBS = [
   { key: "bali-united", name: "Bali United", country: "Indonesia", color: "#b50000", style: "Tiki Taka" },
   { key: "arema", name: "Arema FC", country: "Indonesia", color: "#0b4ea2", style: "Physical" },
   { key: "persebaya", name: "Persebaya Surabaya", country: "Indonesia", color: "#01843f", style: "Wing Play" },
+  ...EXTRA_LAN_REAL_CLUBS,
 ];
 
 
@@ -534,6 +551,7 @@ const LAN_REAL_CLUBS = [
 // Career tetap memakai sistem generated/balanced agar mode jangka panjang tetap fair.
 // Catatan: ini roster LAN statis untuk game lokal, bukan sinkron database transfer real-time.
 const LAN_REAL_SQUADS = {
+  ...REAL_WORLD_SQUAD_SEEDS,
   "man-city": [
     ["GK", "Ederson"], ["RB", "Kyle Walker"], ["CB", "Ruben Dias"], ["CB", "John Stones"], ["LB", "Josko Gvardiol"],
     ["CDM", "Rodri"], ["CM", "Bernardo Silva"], ["CM", "Kevin De Bruyne"], ["RW", "Phil Foden"], ["LW", "Jeremy Doku"], ["ST", "Erling Haaland"],
@@ -733,8 +751,8 @@ const REAL_SOCCER_FRAME_MS = 33;
 // v14: fisik pemain tetap halus per frame, tetapi clock match dipercepat: 1 menit game = ±1 detik real-time.
 const REAL_SOCCER_TICK_SECONDS = Number(((REAL_SOCCER_FRAME_MS / 1000) * 4).toFixed(3));
 const REAL_SOCCER_CLOCK_SECONDS = Number(((REAL_SOCCER_FRAME_MS / 1000) * 60).toFixed(3));
-const QUICK_SIM_TICK_SECONDS = 180;
-const QUICK_SIM_FRAME_MS = 520;
+const QUICK_SIM_TICK_SECONDS = 45;
+const QUICK_SIM_FRAME_MS = 150;
 const SUBSTITUTION_LIMIT = 3;
 const RT_STICK_DEADZONE = 0.075;
 const RT_STICK_SPRINT_ZONE = 0.72;
@@ -804,6 +822,7 @@ const MANAGER_EVENTS = [
   { key: "academyParent", type: "youth", title: "Keluarga wonderkid meminta kejelasan", stakes: "Akademi butuh jalur nyata. Keputusan memengaruhi minat youth bertahan, loan, atau promosi.", choices: ["Beri jalur promosi", "Siapkan loan", "Tunggu laporan pelatih" ] },
   { key: "mediaLeak", type: "media", title: "Bocoran ruang ganti masuk media", stakes: "Respons publik menentukan apakah krisis melebar atau berubah menjadi motivasi tim.", choices: ["Lindungi pemain", "Bantah keras", "Akui dan perbaiki" ] },
   { key: "globalSponsor", type: "sponsor", title: "Sponsor global memantau klub", stakes: "Reputasi dan gaya bicara manager bisa membuka bonus uang, tapi target klub ikut naik.", choices: ["Ambil panggung global", "Negosiasi bonus aman", "Tolak tekanan besar" ] },
+  ...EXTRA_MANAGER_EVENTS,
 ];
 
 const FORMATIONS = {
@@ -1104,7 +1123,7 @@ function newsItems({ teams, week, market, cash, storyLog, log, myTeam, worldNews
 }
 
 function clubPrestige(teamId) {
-  const idx = CLUB_DATA.findIndex((c) => c[0] === teamId);
+  const idx = CAREER_CLUB_CHOICES.findIndex((c) => c[0] === teamId);
   if (idx < 0) return 1;
   return clamp(1.18 - idx * 0.008, 0.82, 1.22);
 }
@@ -1221,10 +1240,20 @@ function lineForFormation(formation) {
 }
 function mirror(slot) { return { ...slot, y: BOARD_ROWS - 1 - slot.y }; }
 function buildClubs() {
-  const clubs = CLUB_DATA.map(([id, name, city, color, fans, style], idx) => {
-    const leagueKey = initialLeagueKeyByIndex(idx);
+  const sourceClubs = Array.isArray(REAL_WORLD_CLUBS) && REAL_WORLD_CLUBS.length
+    ? REAL_WORLD_CLUBS
+    : CLUB_DATA.map(([id, name, city, color, fans, style]) => ({ id, key: `club-${id}`, name, city, color, fans, style, country: city, league: "Virtual League", manager: "", overview: "" }));
+  const clubs = sourceClubs.map((def, idx) => {
+    const id = def.id ?? idx + 1;
+    const name = def.name || `Club ${id}`;
+    const city = def.city || def.country || "World";
+    const color = def.color || ["#e63946", "#2a9d8f", "#4361ee", "#e9c46a"][idx % 4];
+    const fans = def.fans || (30000 + idx * 700);
+    const style = def.style || pick(AI_STYLE_POOL);
+    const leagueKey = def.careerLeagueKey || initialLeagueKeyByIndex(idx, sourceClubs.length);
     return {
-      id, name, city, color, fans, style, leagueKey, leagueLevel: leagueInfo(leagueKey).level, leagueName: leagueName(leagueKey),
+      id, clubKey: def.key || `club-${id}`, name, city, color, fans, style, realWorld: Boolean(def.league), realLeague: def.realLeague || def.league || "Virtual League", realManager: def.manager || "", clubOverview: def.overview || "", sourceUrl: def.sourceUrl || "",
+      leagueKey, leagueLevel: leagueInfo(leagueKey).level, leagueName: leagueName(leagueKey),
       rivalId: id % 2 === 1 ? id + 1 : id - 1,
       players: [], preferredFormation: pick(Object.keys(FORMATIONS)),
       wins: 0, draws: 0, losses: 0, gf: 0, ga: 0, pts: 0, form: [], morale: 70, budget: INITIAL_CASH,
@@ -1233,8 +1262,22 @@ function buildClubs() {
   });
   clubs.forEach((team, idx) => {
     const leagueKey = team.leagueKey;
-    BASE_POSITIONS.forEach((pos, i) => team.players.push(genPlayer(pos, team.id, rng(-2, 2))));
-    for (let i = 0; i < 18; i += 1) team.players.push(genPlayer(pick(EXTRA_POSITIONS), team.id, rng(-4, 1)));
+    const realSquad = (LAN_REAL_SQUADS[team.clubKey] || REAL_WORLD_SQUAD_SEEDS[team.clubKey] || []).slice(0, 30);
+    const usedNames = new Set();
+    const addSeedPlayer = ([pos, name]) => {
+      if (!name || usedNames.has(name)) return;
+      usedNames.add(name);
+      const generated = genPlayer(pos || pick(EXTRA_POSITIONS), team.id, rng(-2, 2));
+      team.players.push({ ...generated, name, pos: pos || generated.pos, sourceClub: team.name, realRosterSeed: true });
+    };
+    realSquad.forEach(addSeedPlayer);
+    BASE_POSITIONS.forEach((pos) => { if (team.players.length < BASE_POSITIONS.length) team.players.push(genPlayer(pos, team.id, rng(-2, 2))); });
+    const fallbackPositions = [...BASE_POSITIONS, ...EXTRA_POSITIONS, ...EXTRA_POSITIONS];
+    let i = 0;
+    while (team.players.length < 30) {
+      team.players.push(genPlayer(fallbackPositions[i % fallbackPositions.length], team.id, rng(-4, 1)));
+      i += 1;
+    }
     const rebalanced = rebalanceTeamForLeague(team, leagueKey);
     Object.assign(team, rebalanced, { budget: INITIAL_CASH });
   });
@@ -1671,8 +1714,12 @@ function randomStoryEvent(week, teams = [], myTeam = null, manager = {}) {
     : e.type === "sponsor" ? "Sponsor dapat memberi uang cepat, tetapi target membuat board lebih menuntut."
     : e.type === "youth" ? "Keputusan bisa mempercepat breakthrough akademi atau membuka offer loan untuk youth."
     : e.type === "board" ? "Board akan mengingat nada jawaban ini sampai beberapa pekan berikutnya."
+    : e.type === "facility" ? "Fasilitas klub bisa ikut berubah: stadion, training, akademi, medical, sponsor, atau merchandise."
+    : e.type === "medical" ? "Risiko cedera dan recovery skuad dipengaruhi medical center, rotasi, dan nada komunikasi."
+    : e.type === "training" ? "Pilihan latihan bisa mengubah intensitas, stamina, dan performa match berikutnya."
+    : e.type === "chat" ? "Chat dadakan ini bisa melebar menjadi headline, trust issue, atau perubahan suasana ruang ganti."
     : e.stakes;
-  return { id: `${week}-${Date.now()}-${Math.random().toString(36).slice(2)}`, week, key: e.key, type: e.type, title: e.title, stakes: e.stakes, arc, relatedClubId: rival?.id || null, relatedClubName: rival?.name || null, choices: e.choices, choice: null, effect: null };
+  return { id: `${week}-${Date.now()}-${Math.random().toString(36).slice(2)}`, week, key: e.key, type: e.type, speaker: e.speaker || null, title: e.title, stakes: e.stakes, arc, relatedClubId: rival?.id || null, relatedClubName: rival?.name || null, choices: e.choices, choice: null, effect: null };
 }
 
 function trainingBonus(game, key) { return TRAINING_PLANS[game.trainingPlan]?.[key] || 0; }
@@ -1965,9 +2012,9 @@ function inboxItems({ myTeam, fixture, fixtures = [], week, cash, scoutQueue, pe
   const bestAffordable = (market || []).filter((p) => p.value <= cash && !p.userListed).sort((a, b) => b.overall - a.overall)[0];
   if (bestAffordable) items.push({ icon: "🛒", title: "Target transfer terjangkau", body: `${bestAffordable.name} (${bestAffordable.pos}, OVR ${bestAffordable.overall}) masuk budget sekarang. Cek dulu potensi lewat tombol scout/potensi.`, actionTab: "transfer", actionLabel: "Buka Transfer" });
   const openStory = storyLog?.filter((e) => !e.choice).length || 0;
-  const meetingUsed = storyLog?.some((e) => e.manualMeeting && e.week === week);
+  const meetingUsed = storyLog?.some((e) => e.manualMeeting && Math.floor(((e.week || 1) - 1) / 4) === Math.floor((week - 1) / 4));
   if (openStory) items.push({ icon: "🗞️", title: `${openStory} story event belum dijawab`, body: "Jawaban manager memengaruhi fans, board, kas, reputasi, rivalitas, berita, dan morale.", actionTab: "story", actionLabel: "Jawab Story" });
-  else items.push({ icon: "🎙️", title: meetingUsed ? "Meeting media pekan ini sudah dipakai" : "Meeting media tersedia", body: meetingUsed ? "Buka meeting hanya 1x per pekan agar tidak bisa spam efek story." : "Buka 1 meeting opsional pekan ini untuk memancing berita dan dampak klub.", actionTab: "story", actionLabel: "Buka Story" });
+  else items.push({ icon: "🎙️", title: meetingUsed ? "Meeting media bulan ini sudah dipakai" : "Meeting bulanan tersedia", body: meetingUsed ? "Meeting manual kini hanya 1x per 4 pekan agar keputusan lebih berat dan tidak repetitif." : "Buka 1 meeting opsional per bulan untuk memancing chat dadakan, berita, dan dampak klub.", actionTab: "story", actionLabel: "Buka Story" });
   const tired = seniorPlayers(myTeam).filter((p) => (p.fitness || 100) < 65).length || 0;
   if (tired) items.push({ icon: "🩺", title: `${tired} pemain kurang fit`, body: `Training ${trainingPlan}; Medical Lv ${facilities?.medical || 1}. Rotasi dan recovery mengurangi risiko cedera fatal.`, actionTab: "training", actionLabel: "Atur Latihan" });
   items.push({ icon: "🗓️", title: "Kalender & jadwal", body: `Season 60 pekan. Pekan dengan 2+ laga dipisah tanggal supaya tidak terlalu berdekatan.`, actionTab: "calendar", actionLabel: "Lihat Kalender" });
@@ -3401,13 +3448,54 @@ function quickSimAutoSub(game, side) {
   game.subCount[side] = (game.subCount?.[side] || 0) + 1;
   appendLog(game, "🔁", `${side === "home" ? game.homeName : game.awayName} melakukan pergantian AI: ${firstName(sub.name)} masuk menggantikan ${firstName(old.name)}. (${game.subCount[side]}/3)`);
 }
+
+function quickSimMotion(game, seconds = QUICK_SIM_TICK_SECONDS) {
+  if (!game?.pieces?.length) return game;
+  const clock = game.clockSeconds || 0;
+  const t = clock / Math.max(1, matchMaxSeconds(game));
+  const hp = quickSimPower(game, "home");
+  const ap = quickSimPower(game, "away");
+  const homeWave = Math.sin(t * Math.PI * 8 + (hp - ap) * 0.035);
+  const homeBias = clamp(0.5 + (hp - ap) * 0.012, 0.36, 0.64);
+  const homeHasBall = homeWave + (homeBias - 0.5) * 2 >= 0;
+  const attackingSide = homeHasBall ? "home" : "away";
+  const attackPulse = (Math.sin(t * Math.PI * 14) + 1) / 2;
+  const bx = clampFieldX(FIELD_W / 2 + Math.sin(t * Math.PI * 17 + hp * 0.11) * 34);
+  const by = attackingSide === "home"
+    ? clampFieldY(FIELD_H * (0.56 - attackPulse * 0.46))
+    : clampFieldY(FIELD_H * (0.44 + attackPulse * 0.46));
+  game.ball = { ...(game.ball || {}), x: bx, y: by, vx: 0, vy: 0, free: true, ownerId: null, intent: "quickSimFlow" };
+  (game.pieces || []).forEach((p, idx) => {
+    if (!rtAlive(game, p)) return;
+    const seed = (Number(p.playerId || 0) || idx + 1) * 0.37;
+    const baseX = clampFieldX(p.homeX ?? gridToFieldX(p.x));
+    const baseY = clampFieldY(p.homeY ?? gridToFieldY(p.y));
+    const isAttacking = p.side === attackingSide;
+    const role = p.role || p.pos;
+    const chase = role === "GK" ? 0.035 : isAttacking ? 0.18 : 0.115;
+    const width = role === "LW" || role === "LM" || role === "LB" ? -5 : role === "RW" || role === "RM" || role === "RB" ? 5 : 0;
+    const linePush = role === "ST" || role === "LW" || role === "RW" ? 4.2 : role === "CAM" || role === "CM" ? 2.4 : role === "CB" || role === "LB" || role === "RB" ? -1.5 : 0;
+    const attackDir = p.side === "home" ? -1 : 1;
+    const driftX = Math.sin(clock / 185 + seed) * (role === "GK" ? 1.2 : 3.2) + width;
+    const driftY = Math.cos(clock / 210 + seed) * (role === "GK" ? 0.7 : 2.1) + (isAttacking ? linePush * attackDir : -linePush * 0.38 * attackDir);
+    const targetX = baseX + (bx - baseX) * chase + driftX;
+    const targetY = baseY + (by - baseY) * chase + driftY;
+    p.rx = clampFieldX((p.rx ?? baseX) * 0.34 + targetX * 0.66);
+    p.ry = clampFieldY((p.ry ?? baseY) * 0.34 + targetY * 0.66);
+    p.x = clamp(Math.round(((p.rx - 4) / (FIELD_W - 8)) * (BOARD_COLS - 1)), 0, BOARD_COLS - 1);
+    p.y = clamp(Math.round(((p.ry - 3) / (FIELD_H - 6)) * (BOARD_ROWS - 1)), 0, BOARD_ROWS - 1);
+  });
+  return game;
+}
+
 function tickQuickSim(game, seconds = QUICK_SIM_TICK_SECONDS) {
   const next = clone(game);
   if (!next || next.ended || next.goalPause || next.mode !== "quickSim") return next;
   if (next.sim?.paused) return next;
   next.clockSeconds = clamp((next.clockSeconds || 0) + seconds, 0, matchMaxSeconds(next));
   next.sim = { ...(next.sim || {}), staminaPulse: (next.sim?.staminaPulse || 0) + 1 };
-  (next.pieces || []).forEach((p) => { if (rtAlive(next, p)) p.energy = clamp((p.energy || 85) - (p.stamina ? clamp(88 - p.stamina, 0, 42) / 90 : 0.18) - 0.55, 18, 100); });
+  quickSimMotion(next, seconds);
+  (next.pieces || []).forEach((p) => { if (rtAlive(next, p)) p.energy = clamp((p.energy || 85) - (p.stamina ? clamp(88 - p.stamina, 0, 42) / 135 : 0.12) - 0.22, 18, 100); });
   {
     const hp = quickSimPower(next, "home");
     const ap = quickSimPower(next, "away");
@@ -5611,15 +5699,16 @@ function FootballManager() {
   };
   const resetSave = () => { clearCareer(); notify("Save manual di browser dihapus. File download tetap aman kalau kamu punya.", "warn"); };
   const requestStoryMeeting = () => {
-    if (storyLog.some((e) => e.manualMeeting && e.week === week)) {
+    const monthIndex = Math.floor((week - 1) / 4);
+    if (storyLog.some((e) => e.manualMeeting && Math.floor(((e.week || 1) - 1) / 4) === monthIndex)) {
       setTab("story");
-      notify("Meeting media hanya bisa dibuka 1x per pekan. Lanjutkan match/pekan dulu untuk membuka meeting baru.", "warn");
+      notify("Meeting media hanya bisa dibuka 1x per bulan game (4 pekan). Lanjutkan kalender untuk membuka meeting bulan berikutnya.", "warn");
       return;
     }
-    const event = { ...randomStoryEvent(week, teams, myTeam, manager), manualMeeting: true, source: "manualMeeting" };
-    setStoryLog((prev) => [event, ...prev].slice(0, 28));
+    const event = { ...randomStoryEvent(week, teams, myTeam, manager), manualMeeting: true, source: "manualMeeting", season };
+    setStoryLog((prev) => [event, ...prev].slice(0, 40));
     setTab("story");
-    notify("Meeting media/story baru dibuka untuk pekan ini. Pilihanmu akan masuk berita dan berdampak ke klub.", "info");
+    notify("Meeting bulanan dibuka. Ini bisa berupa chat dadakan dari pemain, CEO, reporter, fans, sponsor, atau manager rival.", "info");
   };
 
   const answerStory = (eventId, choice) => {
@@ -5635,12 +5724,23 @@ function FootballManager() {
     if (event.type === "locker") { fans += lower.includes("bonus") ? 1 : 0; cashDelta -= lower.includes("bonus") ? 12000 : 0; }
     if (event.type === "youth") { rep += lower.includes("promosi") ? 1 : 0; }
     if (lower.includes("bonus") || lower.includes("sponsor") || lower.includes("negosiasi")) cashDelta += 25000;
-    const effect = `${fans >= 0 ? "+" : ""}${fans} Fans · ${board >= 0 ? "+" : ""}${board} Board${rep ? ` · +${rep} Rep` : ""}${cashDelta ? ` · ${cashDelta > 0 ? "+" : ""}${money(cashDelta)} kas` : ""}`;
+    const facilityKeys = [];
+    if (lower.includes("akademi") || lower.includes("youth")) facilityKeys.push("academy");
+    if (lower.includes("training") || lower.includes("latihan")) facilityKeys.push("training");
+    if (lower.includes("stadion")) facilityKeys.push("stadium");
+    if (lower.includes("medical") || lower.includes("recovery")) facilityKeys.push("medical");
+    if (lower.includes("merchandise") || lower.includes("jersey")) facilityKeys.push("merchandise");
+    if (lower.includes("sponsor")) facilityKeys.push("sponsor");
+    if (facilityKeys.length && (event.type === "facility" || event.type === "medical" || event.type === "training")) board += 2;
+    const facilityText = facilityKeys.length ? ` · Fasilitas: ${[...new Set(facilityKeys)].join(", ")}` : "";
+    const effect = `${fans >= 0 ? "+" : ""}${fans} Fans · ${board >= 0 ? "+" : ""}${board} Board${rep ? ` · +${rep} Rep` : ""}${cashDelta ? ` · ${cashDelta > 0 ? "+" : ""}${money(cashDelta)} kas` : ""}${facilityText}`;
     setStoryLog((prev) => prev.map((e) => e.id === eventId ? { ...e, choice, effect, resolvedWeek: week } : e));
     setManager((m) => ({ ...m, reputation: clamp((m.reputation || 1) + rep, 1, 99), fanTrust: clamp(m.fanTrust + fans, 0, 100), boardTrust: clamp(m.boardTrust + board, 0, 100) }));
     if (cashDelta) setCash((c) => c + cashDelta);
-    if (lower.includes("akademi")) setFacilities((f) => ({ ...f, academy: Math.min(5, (f.academy || 1) + (roll(28) ? 1 : 0)) }));
-    if (lower.includes("training")) setFacilities((f) => ({ ...f, training: Math.min(5, (f.training || 1) + (roll(28) ? 1 : 0)) }));
+    if (facilityKeys.length) {
+      const uniqueFacilityKeys = [...new Set(facilityKeys)];
+      setFacilities((f) => uniqueFacilityKeys.reduce((acc, key) => ({ ...acc, [key]: Math.min(5, (acc[key] || 1) + (roll(event.type === "facility" ? 46 : 30) ? 1 : 0)) }), f));
+    }
     if (event.type === "rivalry" && event.relatedClubId && (lower.includes("rival") || lower.includes("panas") || lower.includes("derby"))) {
       setTeams((prev) => prev.map((t) => t.id === MY_TEAM_ID ? { ...t, rivalId: event.relatedClubId, rivalryHeat: clamp((t.rivalryHeat || 0) + 18, 0, 100) } : t.id === event.relatedClubId ? { ...t, rivalId: MY_TEAM_ID, rivalryHeat: clamp((t.rivalryHeat || 0) + 18, 0, 100) } : t));
     }
@@ -5666,7 +5766,8 @@ function FootballManager() {
     notify(`Gaya taktik diubah ke ${style}. Ini langsung mengubah AI teammate, off-ball run, passing, pressing, dan shot saat match.`, "success");
   };
 
-  const tabs = [["dashboard", "Home"], ["inbox", "Inbox"], ["career", "Career"], ["calendar", "Calendar"], ["news", "Berita"], ["competitions", "Kompetisi"], ["training", "Latihan"], ["squad", "Skuad"], ["tactics", "Taktik"], ["schedule", "Jadwal"], ["champions", "Champions"], ["table", "Klasemen"], ["transfer", "Transfer"], ["youth", "Youth"], ["story", "Story"], ["facilities", "Fasilitas"], ["objectives", "Target"], ["clubs", "Klub"], ["aiGrowth", "AI Growth"], ["debug", "QA"]];
+  const navGroups = NAV_GROUPS;
+  const activeTabLabel = navGroups.flatMap((g) => g.items).find(([id]) => id === tab)?.[1] || "Home";
   if (lanOpen) {
     return <div className="appShell landingShell">
       {notice && <Notice notice={notice} />}
@@ -5694,11 +5795,19 @@ function FootballManager() {
   return <div className="appShell">
     {notice && <Notice notice={notice} />}
     <header className="topbar">
-      <div className="brand"><div className="logo" style={{ background: myTeam.color }}>⚽</div><div><h1>{myTeam.name}</h1><p>Bola Catur Arena V12 · Career + LAN</p></div></div>
+      <div className="brand"><div className="logo" style={{ background: myTeam.color }}>⚽</div><div><h1>{myTeam.name}</h1><p>Bola Catur Arena V22 · Career + LAN + Events</p></div></div>
       <div className="quickStats"><Stat label="Season" value={`S${season}`} /><Stat label="Pekan" value={`${Math.min(week, SEASON_LENGTH_WEEKS)}/${SEASON_LENGTH_WEEKS}`} /><Stat label="Posisi" value={`#${myRank}`} /><Stat label="Kas" value={money(cash)} /><Stat label="AP" value={active?.game ? active.game.ap : "-"} /></div>
       <button className="primary big" onClick={startMatch}>{active ? "LANJUT MATCH" : preMatch ? "ATUR FORMASI" : "MAIN PEKAN"}</button>
     </header>
-    <nav className="tabs">{tabs.map(([id, label]) => <button key={id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}>{label}</button>)}</nav>
+    <nav className="navMega" aria-label="Menu utama">
+      {navGroups.map((group) => {
+        const groupActive = group.items.some(([id]) => id === tab);
+        return <details key={group.key} className={groupActive ? "active" : ""} open={groupActive}>
+          <summary><span>{group.icon}</span><b>{group.label}</b><small>{groupActive ? activeTabLabel : `${group.items.length} menu`}</small></summary>
+          <div>{group.items.map(([id, label]) => <button key={id} className={tab === id ? "active" : ""} onClick={() => setTab(id)}>{label}</button>)}</div>
+        </details>;
+      })}
+    </nav>
     <main>
       {tab === "dashboard" && <Dashboard team={myTeam} rank={myRank} week={week} season={season} cash={cash} fixture={myFixture} teams={teams} startMatch={startMatch} active={active} facilities={facilities} trainingPlan={trainingPlan} objectives={objectives} objectiveCtx={objectiveCtx} claimed={claimed} startFriendly={startFriendly} />}
       {tab === "inbox" && <InboxTab items={inboxItems({ myTeam, fixture: myFixture, fixtures: weekUserFixtures, week, cash, scoutQueue, pendingTransfers, storyLog, market, facilities, trainingPlan, active })} startMatch={startMatch} setTab={setTab} /> }
@@ -5750,7 +5859,7 @@ function LandingScreen({ startNewCareer, startTutorial, startFriendly, openLan, 
         <div className="difficultyPicker"><b>AI Difficulty</b>{Object.values(AI_DIFFICULTIES).map((d) => <button key={d.label} className={aiDifficulty === d.label ? "active" : ""} onClick={() => setAiDifficulty(d.label)}>{d.label}<small>{d.desc}</small></button>)}</div>
       </div>
       <div className="preCareerSetup">
-        <div className="setupPanel"><b>Pilih Club Career</b><small>Semua klub dimulai fair: rata-rata skuad inti sekitar 70 dan budget Rp 50.000.</small><div className="clubSelectGrid">{CLUB_DATA.map(([id, name, city, color]) => <button key={id} className={Number(selectedClubId) === id ? "active" : ""} onClick={() => setSelectedClubId(id)} style={{ borderColor: Number(selectedClubId) === id ? color : undefined }}><span style={{ background: color }} /> <b>{name}</b><small>{city}</small></button>)}</div></div>
+        <div className="setupPanel"><b>Pilih Club Career</b><small>Semua klub dimulai fair: rata-rata skuad inti sekitar 70 dan budget Rp 50.000.</small><div className="clubSelectGrid">{CAREER_CLUB_CHOICES.map(([id, name, city, color]) => <button key={id} className={Number(selectedClubId) === id ? "active" : ""} onClick={() => setSelectedClubId(id)} style={{ borderColor: Number(selectedClubId) === id ? color : undefined }}><span style={{ background: color }} /> <b>{name}</b><small>{city}</small></button>)}</div></div>
         <div className="setupPanel"><b>Pilih Coach</b><small>Coach menentukan identitas awal manager dan trust board/fans.</small><div className="coachSelectGrid">{COACH_PRESETS.map((c) => <button key={c.key} className={selectedCoachKey === c.key ? "active" : ""} onClick={() => setSelectedCoachKey(c.key)}><strong>{c.icon}</strong><b>{c.name}</b><small>{c.style} · {c.desc}</small></button>)}</div></div>
       </div>
       <div className="landingActions"><button className="primary big" onClick={startNewCareer}>Career Manager World</button><button className="ghost big" onClick={openLan}>📡 Multiplayer LAN</button><button className="ghost big" onClick={startFriendly}>🤝 Quick Match</button><button className="ghost big" onClick={startTutorial}>🎓 Coba Tutorial</button><button className="ghost big" onClick={loadNow}>Load Browser Save</button><label className="fileButton big">Load File Save<input type="file" accept="application/json,.json" onChange={(e) => importSaveFile(e.target.files?.[0])} /></label></div>
@@ -6143,15 +6252,17 @@ function ManagerSimTeamPanel({ game, side, view }) {
 function ManagerSimPitch({ game }) {
   const latest = (game.events || []).slice(-1)[0];
   const latestPiece = latest?.playerId ? (game.pieces || []).find((p) => String(p.playerId) === String(latest.playerId)) : null;
-  const ball = latestPiece || getPiece(game, game.ballOwnerId) || null;
-  const bx = ball ? clamp(ball.rx ?? gridToFieldX(ball.x), 3, FIELD_W - 3) : FIELD_W / 2;
-  const by = ball ? clamp(ball.ry ?? gridToFieldY(ball.y), 3, FIELD_H - 3) : FIELD_H / 2;
+  const currentMinute = minuteOf(game);
+  const hotPiece = latestPiece && Number(latest?.min || latest?.minute || 0) >= currentMinute - 1 ? latestPiece : null;
+  const ballPiece = hotPiece || getPiece(game, game.ballOwnerId) || null;
+  const bx = ballPiece ? clamp(ballPiece.rx ?? gridToFieldX(ballPiece.x), 3, FIELD_W - 3) : clamp(game.ball?.x ?? FIELD_W / 2, 3, FIELD_W - 3);
+  const by = ballPiece ? clamp(ballPiece.ry ?? gridToFieldY(ballPiece.y), 3, FIELD_H - 3) : clamp(game.ball?.y ?? FIELD_H / 2, 3, FIELD_H - 3);
   const pieces = (game.pieces || []).filter((p) => rtAlive(game, p)).slice().sort((a, b) => (a.ry || 0) - (b.ry || 0));
   return <div className="managerSimPitch"><div className="mspHalf" /><div className="mspCircle" /><div className="mspBox top" /><div className="mspBox bottom" /><div className="mspGoal top" /><div className="mspGoal bottom" />
     {pieces.map((p) => {
       const left = `${(clamp(p.rx ?? gridToFieldX(p.x), 0, FIELD_W) / FIELD_W) * 100}%`;
       const top = `${(clamp(p.ry ?? gridToFieldY(p.y), 0, FIELD_H) / FIELD_H) * 100}%`;
-      return <span key={p.id} className={`mspDot ${p.side} ${latestPiece?.id === p.id ? "hot" : ""}`} style={{ left, top }} title={`${p.role} ${p.name}`}><b>{simShirtNo(p)}</b></span>;
+      return <span key={p.id} className={`mspDot ${p.side} ${hotPiece?.id === p.id ? "hot" : ""}`} style={{ left, top }} title={`${p.role} ${p.name}`}><b>{simShirtNo(p)}</b></span>;
     })}
     <span className="mspBall" style={{ left: `${(bx / FIELD_W) * 100}%`, top: `${(by / FIELD_H) * 100}%` }}>⚽</span>
   </div>;
@@ -6708,14 +6819,14 @@ function YouthTab({ team, facilities, week = 1, sell, listLoan, promoteYouth, ch
 function StoryTab({ storyLog, answerStory, requestStoryMeeting, manager, myTeam, week }) {
   const open = storyLog.filter((e) => !e.choice).length;
   const resolved = storyLog.filter((e) => e.choice).length;
-  const meetingUsed = storyLog.some((e) => e.manualMeeting && e.week === week);
+  const meetingUsed = storyLog.some((e) => e.manualMeeting && Math.floor(((e.week || 1) - 1) / 4) === Math.floor((week - 1) / 4));
   return <Section title="Story Event & Media Room" sub="Story kini menjadi pusat keputusan manager: media, rivalitas, sponsor, agen, fans ultras, board ultimatum, locker room, youth, dan fasilitas.">
     <div className="storyDashboard">
-      <Card><h3>🎙️ Meeting Media</h3><p>Meeting manual hanya bisa 1x per pekan. Efek pilihan masuk berita dan bisa memengaruhi trust, kas, rivalitas, fasilitas, dan morale pemain.</p><button className="primary full" disabled={meetingUsed} onClick={requestStoryMeeting}>{meetingUsed ? "Meeting Pekan Ini Sudah Dipakai" : "Buka Meeting Sekarang"}</button></Card>
+      <Card><h3>🎙️ Meeting Bulanan</h3><p>Meeting manual sekarang 1x per bulan game (4 pekan). Event berupa chat dadakan dari pemain, CEO, reporter, fans, sponsor, manager rival, atau staf; pilihan bisa menyentuh trust, kas, rivalitas, fasilitas, dan morale.</p><button className="primary full" disabled={meetingUsed} onClick={requestStoryMeeting}>{meetingUsed ? "Meeting Bulan Ini Sudah Dipakai" : "Buka Meeting Bulanan"}</button></Card>
       <Card><h3>Trust & Reputasi</h3><div className="infoGrid"><span>Board</span><b>{manager.boardTrust}%</b><span>Fans</span><b>{manager.fanTrust}%</b><span>Reputasi</span><b>Lv {manager.reputation}</b><span>Rival aktif</span><b>{myTeam?.rivalId ? "Ada" : "Belum"}</b></div></Card>
       <Card><h3>Arsip Story</h3><div className="infoGrid"><span>Belum dijawab</span><b>{open}</b><span>Selesai</span><b>{resolved}</b><span>Total</span><b>{storyLog.length}</b></div></Card>
     </div>
-    {storyLog.length === 0 ? <Card className="empty"><h3>Belum ada story event</h3><p className="muted">Tekan Meeting Media atau mainkan beberapa pekan untuk memicu media, fans, sponsor, agen, board, atau drama skuad.</p></Card> : <div className="storyGrid">{storyLog.map((e) => <Card key={e.id} className={`storyCard ${e.choice ? "resolved" : "open"}`}><div className="newsTag"><span>{e.type === "rivalry" ? "🔥" : e.type === "sponsor" ? "🤝" : e.type === "youth" ? "🌱" : e.type === "board" ? "🏛️" : e.type === "agent" ? "🧾" : "💬"}</span><b>{e.type || "story"}</b></div><h3>{e.title}</h3><p className="muted">Pekan {e.week}{e.relatedClubName ? ` · ${e.relatedClubName}` : ""}{e.choice ? ` · Pilihan: ${e.choice}` : ""}</p>{e.stakes && <p>{e.stakes}</p>}{e.arc && <div className="storyArc">{e.arc}</div>}{e.choice ? <b>Efek: {e.effect}</b> : <div className="choiceList">{e.choices.map((c) => <button key={c} onClick={() => answerStory(e.id, c)}>{c}</button>)}</div>}</Card>)}</div>}
+    {storyLog.length === 0 ? <Card className="empty"><h3>Belum ada story event</h3><p className="muted">Tekan Meeting Bulanan atau mainkan beberapa pekan untuk memicu chat media, fans, sponsor, agen, board, CEO, pemain, manager rival, atau drama skuad.</p></Card> : <div className="storyGrid">{storyLog.map((e) => <Card key={e.id} className={`storyCard ${e.choice ? "resolved" : "open"}`}><div className="newsTag"><span>{e.type === "rivalry" ? "🔥" : e.type === "sponsor" ? "🤝" : e.type === "youth" ? "🌱" : e.type === "board" ? "🏛️" : e.type === "agent" ? "🧾" : "💬"}</span><b>{e.type || "story"}</b></div><h3>{e.title}</h3>{e.speaker && <div className="chatSpeaker"><span>💬</span><b>{e.speaker}</b><small>chat dadakan</small></div>}<p className="muted">Pekan {e.week}{e.relatedClubName ? ` · ${e.relatedClubName}` : ""}{e.choice ? ` · Pilihan: ${e.choice}` : ""}</p>{e.stakes && <p>{e.stakes}</p>}{e.arc && <div className="storyArc">{e.arc}</div>}{e.choice ? <b>Efek: {e.effect}</b> : <div className="choiceList">{e.choices.map((c) => <button key={c} onClick={() => answerStory(e.id, c)}>{c}</button>)}</div>}</Card>)}</div>}
   </Section>;
 }
 function GoalOverlay({ game, onResume }) {
@@ -6751,7 +6862,22 @@ function ChampionsTab({ teams, week, log }) {
 }
 
 function ObjectivesTab({ objectives, ctx, claimed }) { return <Section title="Board Vision" sub="Target hanya panduan seperti manager mode. Tidak ada reward objective otomatis."><div className="cardsGrid">{objectives.map((o) => { const val = objectiveProgress(o, ctx); const done = claimed.includes(o.key) || objectiveComplete(o, ctx); return <Card key={o.key} className={done ? "done" : ""}><h3>{done ? "✅" : "🎯"} {o.title}</h3><p>{o.desc}</p><ProgressLine label="Progress" value={val} target={o.target} done={claimed.includes(o.key)} /><b>Reward otomatis dimatikan</b></Card>; })}</div></Section>; }
-function ClubsTab({ teams }) { return <Section title="Klub" sub="Semua klub punya liga, style AI, budget, wage pressure, trophy, growth score, dan berita. Klub terlalu bertabur 85+/90+ bisa chaos."><div className="clubGrid">{teams.map((t) => { const chaos = starChaos(t); return <Card key={t.id} style={{ borderTop: `4px solid ${t.color}` }}><h3>{t.name} {t.numberOneTitles ? "👑 NO.1" : ""}</h3><p className="muted">{t.city} · {leagueName(t.leagueKey)}</p><div className="infoGrid"><span>Power</span><b>{Math.round(teamPower(t))}</b><span>Fans</span><b>{t.fans.toLocaleString("id-ID")}</b><span>Pemain</span><b>{t.players.length}</b><span>Budget</span><b>{money(t.budget || INITIAL_CASH)}</b><span>Wage</span><b>{money(teamWeeklyWage(t))}</b><span>Stars 85+/90+</span><b>{chaos.stars85}/{chaos.stars90}</b><span>AI Style</span><b>{t.style}</b><span>Growth</span><b>{Math.round(t.growthScore || 0)}</b></div>{chaos.tooMany && <p className="clubNewsMini">💥 <b>Star Chaos</b> · ruang ganti bisa berantakan karena terlalu banyak bintang.</p>}{(t.trophies || []).slice(0, 2).map((tr, i) => <p key={`tr-${i}`} className="clubNewsMini">🏆 <b>{tr.name}</b> · S{tr.season} {tr.mark || ""}</p>)}{(t.aiNews || []).slice(0, 2).map((n, i) => <p key={i} className="clubNewsMini">{n.icon} <b>{n.tag}</b> · {n.title}</p>)}</Card>; })}</div></Section>; }
+function ClubsTab({ teams }) {
+  return <Section title="Klub" sub="Database klub real-world sekarang memuat liga utama, profil singkat, manager, seed roster, budget, wage pressure, trophy, growth score, dan berita.">
+    <div className="clubGrid">{teams.map((t) => {
+      const chaos = starChaos(t);
+      return <Card key={t.id} style={{ borderTop: `4px solid ${t.color}` }}>
+        <h3>{t.name} {t.numberOneTitles ? "👑 NO.1" : ""}</h3>
+        <p className="muted">{t.city} · Career tier: {leagueName(t.leagueKey)}</p>
+        {t.clubOverview && <p className="clubNewsMini">🌍 <b>{t.realLeague}</b>{t.realManager ? ` · Manager: ${t.realManager}` : ""} · {t.clubOverview}</p>}
+        <div className="infoGrid"><span>Power</span><b>{Math.round(teamPower(t))}</b><span>Fans</span><b>{t.fans.toLocaleString("id-ID")}</b><span>Pemain</span><b>{t.players.length}</b><span>Seed Real</span><b>{(t.players || []).filter((p) => p.realRosterSeed).length}</b><span>Budget</span><b>{money(t.budget || INITIAL_CASH)}</b><span>Wage</span><b>{money(teamWeeklyWage(t))}</b><span>Stars 85+/90+</span><b>{chaos.stars85}/{chaos.stars90}</b><span>AI Style</span><b>{t.style}</b><span>Growth</span><b>{Math.round(t.growthScore || 0)}</b></div>
+        {chaos.tooMany && <p className="clubNewsMini">💥 <b>Star Chaos</b> · ruang ganti bisa berantakan karena terlalu banyak bintang.</p>}
+        {(t.trophies || []).slice(0, 2).map((tr, i) => <p key={`tr-${i}`} className="clubNewsMini">🏆 <b>{tr.name}</b> · S{tr.season} {tr.mark || ""}</p>)}
+        {(t.aiNews || []).slice(0, 2).map((n, i) => <p key={i} className="clubNewsMini">{n.icon} <b>{n.tag}</b> · {n.title}</p>)}
+      </Card>;
+    })}</div>
+  </Section>;
+}
 function AIGrowthTab({ teams, worldNews, week }) {
   const aiTeams = teams.filter((t) => t.id !== MY_TEAM_ID).slice().sort((a, b) => (b.growthScore || 0) - (a.growthScore || 0) || teamPower(b) - teamPower(a)).slice(0, 12);
   const wonderkids = teams.flatMap((t) => (t.players || []).filter((p) => p.age <= 21 && (p.rarePotential || p.potential >= 86)).map((p) => ({ ...p, clubName: t.name, clubColor: t.color }))).sort((a, b) => (b.potential - b.overall) - (a.potential - a.overall)).slice(0, 12);

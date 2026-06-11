@@ -1,0 +1,20 @@
+UPDATE REAL-WORLD ROSTER REFRESH V22.1
+
+Yang ditambahkan:
+- Database klub real-world diperluas dari 48 menjadi 120 klub.
+- Cakupan utama: Premier League 20, LaLiga 20, Bundesliga 18, Ligue 1 18, Saudi Pro League 18, BRI Super League/I.League 18.
+- Kompatibilitas lama Serie A tetap disimpan sebagai bonus: Inter, Milan, Juventus, Napoli, Roma, Atalanta, Lazio, Fiorentina.
+- Career tidak lagi slice 48 klub; buildClubs membaca semua REAL_WORLD_CLUBS.
+- Career league tier sekarang dibagi dinamis berdasarkan total klub agar 120 klub tetap playable dalam struktur 4 tier game.
+- Seed roster real-world dimasukkan ke career dan LAN: nama pemain inti/snapshot dipakai dulu, lalu generator balanced melengkapi skuad sampai 30 pemain agar gameplay tetap fair.
+- Tab Klub menampilkan real league, manager, jumlah Seed Real, dan overview snapshot per klub.
+- EXTRA_LAN_REAL_CLUBS sekarang otomatis diambil dari database, jadi pilihan LAN bertambah besar tanpa input manual satu-satu.
+
+Catatan integritas data:
+- Ini adalah snapshot/gambaran roster untuk gameplay, bukan sinkron API transfer resmi berlisensi.
+- Untuk klub yang tidak punya seed detail lengkap, game tetap mengisi sisa pemain dengan generator balanced.
+- Rating/OVR tetap disesuaikan ulang oleh rebalanceTeamForLeague agar tidak merusak fairness career.
+
+QA:
+- npm run build: PASS
+- npm run qa: PASS
