@@ -1,0 +1,18 @@
+UPDATE V21 — Manager Simulation Broadcast UI
+
+Fokus update:
+1. Quick Sim diganti menjadi Manager Simulation Match bergaya layar manajer/broadcast.
+2. Scoreboard tengah, timer, skor besar, formasi, style tim, dan label Big Match/ET/Penalty.
+3. Panel kiri/kanan Starting XI seperti referensi: Fitness, Ratings, Stats, Gameplan.
+4. Pitch taktik 16:9 dengan dot pemain, nomor punggung, bola, momentum, dan highlight pemain terakhir yang terlibat event.
+5. Tab bawah: Fitness / Ratings / Stats / Gameplan.
+6. Kontrol manager: pause/lanjut sim, ganti pemain 3/3, tactical view, surrender.
+7. Statistik quick sim dibuat lebih akurat: possessionSeconds, possession, xG, pass, passOk, saves, chances.
+8. Rating pemain dihitung dari OVR, stamina, kartu, dan event gol.
+9. Responsive: desktop tiga kolom, tablet satu kolom, landscape mobile compact mirip tampilan screenshot.
+10. Legacy backup/source lama dibersihkan supaya QA internal lulus.
+
+Hasil QA:
+- npm run build: lulus
+- npm run qa:static: lulus
+- npm run qa:full: lulus

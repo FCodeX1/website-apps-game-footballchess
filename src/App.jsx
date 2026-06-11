@@ -3361,10 +3361,16 @@ function processQuickSimEvent(game, ev) {
     game.stats[side].goals += 1;
     game.stats[side].shots += 1;
     game.stats[side].onTarget += 1;
+    game.stats[side].xg = (game.stats[side].xg || 0) + clamp(0.16 + (piece?.shoot || 70) / 420 + rng(0, 9) / 100, 0.18, 0.68);
+    game.stats[side].passes = (game.stats[side].passes || 0) + rng(3, 9);
+    game.stats[side].passOk = (game.stats[side].passOk || 0) + rng(2, 8);
     appendLog(game, "🥅", quickSimEventText(game, { ...ev, playerName: piece?.name || ev.playerName }), { type: "goal", side, team: side === "home" ? game.homeName : game.awayName, playerId: piece?.playerId, player: piece?.name });
   } else if (ev.type === "shot" || ev.type === "save") {
     game.stats[side].shots += 1;
-    if (ev.type === "save") game.stats[side].onTarget += 1;
+    game.stats[side].xg = (game.stats[side].xg || 0) + (ev.type === "save" ? clamp(0.09 + rng(0, 18) / 100, 0.09, 0.32) : clamp(0.04 + rng(0, 12) / 100, 0.04, 0.20));
+    game.stats[side].passes = (game.stats[side].passes || 0) + rng(2, 7);
+    game.stats[side].passOk = (game.stats[side].passOk || 0) + rng(1, 6);
+    if (ev.type === "save") { game.stats[side].onTarget += 1; game.stats[otherSide(side)].saves = (game.stats[otherSide(side)].saves || 0) + 1; }
     appendLog(game, ev.type === "save" ? "🧤" : "🎬", quickSimEventText(game, { ...ev, playerName: piece?.name || ev.playerName }));
   } else if (ev.type === "yellow" || ev.type === "red") {
     if (piece) {
@@ -3402,6 +3408,15 @@ function tickQuickSim(game, seconds = QUICK_SIM_TICK_SECONDS) {
   next.clockSeconds = clamp((next.clockSeconds || 0) + seconds, 0, matchMaxSeconds(next));
   next.sim = { ...(next.sim || {}), staminaPulse: (next.sim?.staminaPulse || 0) + 1 };
   (next.pieces || []).forEach((p) => { if (rtAlive(next, p)) p.energy = clamp((p.energy || 85) - (p.stamina ? clamp(88 - p.stamina, 0, 42) / 90 : 0.18) - 0.55, 18, 100); });
+  {
+    const hp = quickSimPower(next, "home");
+    const ap = quickSimPower(next, "away");
+    const homeShare = clamp(50 + (hp - ap) * 0.72 + (sideStyle(next, "home") === "Possession" ? 3 : 0) - (sideStyle(next, "away") === "Possession" ? 3 : 0), 34, 66);
+    next.stats.home.possessionSeconds = (next.stats.home.possessionSeconds || 0) + seconds * (homeShare / 100);
+    next.stats.away.possessionSeconds = (next.stats.away.possessionSeconds || 0) + seconds * ((100 - homeShare) / 100);
+    next.stats.home.possession = Math.round(next.stats.home.possessionSeconds || 0);
+    next.stats.away.possession = Math.round(next.stats.away.possessionSeconds || 0);
+  }
   const minute = minuteOf(next);
   (next.sim?.timeline || []).filter((ev) => ev.min <= minute && !(next.sim?.processed || []).includes(ev.id)).forEach((ev) => processQuickSimEvent(next, ev));
   if ((next.clockSeconds || 0) >= matchMaxSeconds(next)) finishMatchWithExtraTime(next, next.extraTimeStarted ? "AET" : "Quick Sim full time");
@@ -6075,19 +6090,119 @@ function StaminaMiniList({ game, side }) {
   const players = rtTeam(game, side).slice().sort((a, b) => (a.role === "GK" ? -1 : b.role === "GK" ? 1 : (a.energy || 80) - (b.energy || 80))).slice(0, 11);
   return <div className="simStaminaList">{players.map((p) => <div key={p.id} className="simStaminaRow"><span>{p.role} {firstName(p.name)}</span><b>{Math.round(p.energy || 0)}%</b><i><em style={{ width: `${clamp(p.energy || 0, 0, 100)}%` }} /></i></div>)}</div>;
 }
+function simTeamStats(game, side) {
+  const stats = game.stats?.[side] || emptyStats();
+  const other = game.stats?.[otherSide(side)] || emptyStats();
+  const posTotal = (stats.possessionSeconds || stats.possession || 0) + (other.possessionSeconds || other.possession || 0);
+  const possession = posTotal ? Math.round(((stats.possessionSeconds || stats.possession || 0) / posTotal) * 100) : 50;
+  const chances = Math.max(0, Math.round((stats.xg || 0) * 1.8 + (stats.shots || 0) * 0.45));
+  const passPct = stats.passes ? Math.round(((stats.passOk || 0) / stats.passes) * 100) : 84;
+  return { possession, shots: stats.shots || 0, onTarget: stats.onTarget || 0, chances, xg: Math.round((stats.xg || 0) * 100) / 100, saves: stats.saves || 0, fouls: stats.fouls || 0, passPct };
+}
+function simGameplan(game, side) {
+  const style = sideStyle(game, side);
+  const map = {
+    Possession: { build: "Short Build-Up", defend: "Balanced Press", tempo: "Patient", width: "Normal" },
+    Counter: { build: "Counter", defend: "Mid Block", tempo: "Fast Break", width: "Wide" },
+    "High Press": { build: "Vertical Press", defend: "High Line", tempo: "Aggressive", width: "Narrow" },
+    "Park Bus": { build: "Safe Clearance", defend: "Low Block", tempo: "Slow", width: "Compact" },
+    "All Out Attack": { build: "Direct Attack", defend: "Risky Press", tempo: "Very Fast", width: "Wide" },
+    Balanced: { build: "Balanced", defend: "Balanced", tempo: "Normal", width: "Normal" },
+  };
+  return map[style] || map.Balanced;
+}
+function simPlayerRating(game, p) {
+  const evs = (game.events || []).filter((e) => String(e.playerId || "") === String(p.playerId || "") || e.player === p.name);
+  const goals = evs.filter((e) => e.type === "goal").length;
+  const reds = evs.filter((e) => e.type === "red").length + (p.red ? 1 : 0);
+  const yellows = p.yellow || evs.filter((e) => e.type === "yellow").length;
+  const fitness = clamp(p.energy || 80, 0, 100);
+  const roleBoost = ["ST", "CAM", "LW", "RW"].includes(p.role) ? goals * 1.15 : goals * 0.85;
+  return clamp(Math.round((6 + (p.overall - 70) * 0.025 + (fitness - 70) * 0.012 + roleBoost - yellows * 0.18 - reds * 1.8) * 10) / 10, 4, 10);
+}
+function simShirtNo(p) { return p.shirtNumber || ((Number(p.playerId || p.id?.split("-").pop() || p.startingIndex || 0) % 98) + 1); }
+function ManagerSimTeamPanel({ game, side, view }) {
+  const teamName = side === "home" ? game.homeName : game.awayName;
+  const formation = side === "home" ? game.homeFormation : game.awayFormation;
+  const rows = rtTeam(game, side).filter((p) => !p.red || view !== "fitness").slice().sort((a, b) => (a.startingIndex ?? 99) - (b.startingIndex ?? 99));
+  const stats = simTeamStats(game, side);
+  const plan = simGameplan(game, side);
+  const avgFit = Math.round(rows.reduce((sum, p) => sum + (p.energy || 80), 0) / Math.max(1, rows.length));
+  return <aside className={`managerTeamPanel ${side}`}>
+    <div className="managerPanelHead"><span>{side === "home" ? "●" : "●"}</span><b>{teamName}</b><small>{formation} · {sideStyle(game, side)}</small></div>
+    {view === "stats" ? <div className="managerStatStack"><div><b>{stats.possession}%</b><span>Possession</span></div><div><b>{stats.shots}</b><span>Shots</span></div><div><b>{stats.chances}</b><span>Chances</span></div><div><b>{stats.xg}</b><span>xG</span></div><div><b>{stats.passPct}%</b><span>Pass</span></div></div> : view === "gameplan" ? <div className="managerPlanStack"><div><span>Formation</span><b>{formation}</b></div><div><span>Build-Up Style</span><b>{plan.build}</b></div><div><span>Defensive Approach</span><b>{plan.defend}</b></div><div><span>Tempo</span><b>{plan.tempo}</b></div><div><span>Width</span><b>{plan.width}</b></div><div><span>Avg Fitness</span><b>{avgFit}%</b></div></div> : <div className="managerPlayersList">
+      <div className="managerListLabel"><b>Starting 11</b><small>{view === "ratings" ? "Rating" : "Fitness"}</small></div>
+      {rows.map((p) => {
+        const value = view === "ratings" ? simPlayerRating(game, p) : Math.round(p.energy || 0);
+        const pct = view === "ratings" ? clamp(value * 10, 0, 100) : clamp(value, 0, 100);
+        return <div key={p.id} className={`managerPlayerRow ${p.red ? "sentOff" : ""} ${value < (view === "ratings" ? 6 : 55) ? "low" : ""}`}><span>{simShirtNo(p)}</span><b>{firstName(p.name)}</b><small>{p.role}</small><strong>{view === "ratings" ? value.toFixed(1) : `${value}%`}</strong><i><em style={{ width: `${pct}%` }} /></i></div>;
+      })}
+    </div>}
+  </aside>;
+}
+function ManagerSimPitch({ game }) {
+  const latest = (game.events || []).slice(-1)[0];
+  const latestPiece = latest?.playerId ? (game.pieces || []).find((p) => String(p.playerId) === String(latest.playerId)) : null;
+  const ball = latestPiece || getPiece(game, game.ballOwnerId) || null;
+  const bx = ball ? clamp(ball.rx ?? gridToFieldX(ball.x), 3, FIELD_W - 3) : FIELD_W / 2;
+  const by = ball ? clamp(ball.ry ?? gridToFieldY(ball.y), 3, FIELD_H - 3) : FIELD_H / 2;
+  const pieces = (game.pieces || []).filter((p) => rtAlive(game, p)).slice().sort((a, b) => (a.ry || 0) - (b.ry || 0));
+  return <div className="managerSimPitch"><div className="mspHalf" /><div className="mspCircle" /><div className="mspBox top" /><div className="mspBox bottom" /><div className="mspGoal top" /><div className="mspGoal bottom" />
+    {pieces.map((p) => {
+      const left = `${(clamp(p.rx ?? gridToFieldX(p.x), 0, FIELD_W) / FIELD_W) * 100}%`;
+      const top = `${(clamp(p.ry ?? gridToFieldY(p.y), 0, FIELD_H) / FIELD_H) * 100}%`;
+      return <span key={p.id} className={`mspDot ${p.side} ${latestPiece?.id === p.id ? "hot" : ""}`} style={{ left, top }} title={`${p.role} ${p.name}`}><b>{simShirtNo(p)}</b></span>;
+    })}
+    <span className="mspBall" style={{ left: `${(bx / FIELD_W) * 100}%`, top: `${(by / FIELD_H) * 100}%` }}>⚽</span>
+  </div>;
+}
+function ManagerMomentumBar({ game }) {
+  const home = simTeamStats(game, "home");
+  const away = simTeamStats(game, "away");
+  const homeMomentum = clamp(50 + (home.shots - away.shots) * 3 + (home.xg - away.xg) * 8 + (home.possession - away.possession) * 0.2, 20, 80);
+  return <div className="managerMomentum"><span>{game.homeName}</span><i><em style={{ width: `${homeMomentum}%` }} /></i><span>{game.awayName}</span></div>;
+}
+function ManagerSimTabs({ value, setValue }) {
+  const tabs = [{ key: "fitness", label: "Fitness" }, { key: "ratings", label: "Ratings" }, { key: "stats", label: "Stats" }, { key: "gameplan", label: "Gameplan" }];
+  return <div className="managerSimTabs">{tabs.map((t) => <button key={t.key} className={value === t.key ? "active" : ""} onClick={() => setValue(t.key)}>{t.label}</button>)}</div>;
+}
 function QuickSimMatch({ active, selectedId, setSelectedId, onAction, finishWeek }) {
   const game = active.game;
   const [subOpen, setSubOpen] = useState(false);
+  const [view, setView] = useState("fitness");
   const selected = getPiece(game, selectedId) || rtTeam(game, game.userSide).find((p) => p.role !== "GK") || rtTeam(game, game.userSide)[0];
   const due = (game.sim?.timeline || []).filter((ev) => ev.min >= minuteOf(game)).slice(0, 5);
   const important = isImportantEliminationGame(game);
-  return <Section title="Quick Sim Match" sub="AI memainkan pertandingan dengan cuplikan cepat. Kamu bisa pause, ganti pemain maksimal 3 kali, lalu lanjutkan simulasi.">
-    <div className="quickSimLayout">
-      <Card className="quickSimScore"><div className="simScoreHero"><span>{game.homeName}</span><strong>{game.score.home} - {game.score.away}</strong><span>{game.awayName}</span></div><div className="simClock"><b>{formatClock(game)}</b><span>{game.extraTimeStarted ? "Extra Time" : important ? "Important Match · ET/Pens aktif jika seri" : "AI Simulation"}</span></div>{game.penalty && <p className="simBadge">🎯 Penalty {game.penalty.home}-{game.penalty.away}</p>}<div className="simButtons">{game.ended ? <button className="primary" onClick={finishWeek}>Selesai & Lanjut Pekan</button> : game.sim?.paused ? <button className="primary" onClick={() => onAction({ type: "start" })}>▶️ Lanjut Sim</button> : <button className="ghost" onClick={() => onAction({ type: "pause" })}>⏸️ Pause</button>}<button className="ghost" disabled={game.ended} onClick={() => setSubOpen(true)}>🔁 Ganti Pemain {game.subCount?.[game.userSide] || 0}/3</button><button className="dangerBtn" disabled={game.ended} onClick={() => onAction({ type: "surrender" })}>🏳️ Surrender 0:3</button></div></Card>
-      <Card className="quickSimFeed"><h3>Cuplikan Live</h3><div className="simTimeline">{game.history.slice(0, 12).map((h, i) => <div key={`${h.minute}-${i}`} className={i === 0 ? "hot" : ""}><small>{h.minute}'</small><b>{h.icon}</b><p>{h.text}</p></div>)}</div></Card>
-      <Card><h3>Progress Aksi Berikutnya</h3>{due.length ? <div className="nextSimMoments">{due.map((ev) => <p key={ev.id}><b>{ev.min}'</b> {ev.type === "goal" ? "Potensi gol" : ev.type === "injury" ? "Risiko cedera" : ev.type === "sub" ? "Rencana pergantian" : ev.type === "yellow" || ev.type === "red" ? "Duel keras/kartu" : "Serangan/shot"} · {sideLabel(ev.side)}</p>)}</div> : <p className="muted">Menunggu aksi berikutnya...</p>}<div className="infoGrid"><span>Pergantian Home</span><b>{game.subCount?.home || 0}/3</b><span>Pergantian Away</span><b>{game.subCount?.away || 0}/3</b><span>Stamina memengaruhi</span><b>pace, tackle, cedera</b></div></Card>
-      <Card><h3>Stamina Tim Kamu</h3><StaminaMiniList game={game} side={game.userSide} /></Card>
-      <Card><h3>Stamina Lawan</h3><StaminaMiniList game={game} side={otherSide(game.userSide)} /></Card>
+  const home = simTeamStats(game, "home");
+  const away = simTeamStats(game, "away");
+  return <Section title="Manager Simulation Match" sub="Tampilan simulasi diperbarui seperti layar manajer: scoreboard broadcast, daftar Starting XI, pitch taktik, Fitness/Ratings/Stats/Gameplan, timeline, dan kontrol pause-substitusi.">
+    <div className="managerSimStage">
+      <div className="managerBroadcastHud card">
+        <div className="managerHudTeam"><b>{game.homeName}</b><small>{game.homeFormation} · {game.homeStyle}</small></div>
+        <div className="managerHudScore"><span>{formatClock(game)} {game.extraTimeStarted ? "· ET" : important ? "· Big Match" : ""}</span><strong>{game.score.home} : {game.score.away}</strong>{game.penalty && <em>Pens {game.penalty.home}-{game.penalty.away}</em>}</div>
+        <div className="managerHudTeam right"><b>{game.awayName}</b><small>{game.awayFormation} · {game.awayStyle}</small></div>
+      </div>
+      <div className="managerSimShell">
+        <ManagerSimTeamPanel game={game} side="home" view={view} />
+        <Card className="managerSimCenter">
+          <div className="managerMiniStats"><div><b>{home.possession}</b><span>Possession %</span><b>{away.possession}</b></div><div><b>{home.shots}</b><span>Shots</span><b>{away.shots}</b></div><div><b>{home.chances}</b><span>Chances</span><b>{away.chances}</b></div></div>
+          <ManagerSimPitch game={game} />
+          <ManagerMomentumBar game={game} />
+          <ManagerSimTabs value={view} setValue={setView} />
+          <div className="managerControlDock">
+            {game.ended ? <button className="primary" onClick={finishWeek}>Selesai & Lanjut Pekan</button> : game.sim?.paused ? <button className="primary" onClick={() => onAction({ type: "start" })}>▶️ Lanjut Sim</button> : <button className="ghost" onClick={() => onAction({ type: "pause" })}>⏸️ Pause</button>}
+            <button className="ghost" disabled={game.ended} onClick={() => setSubOpen(true)}>🔁 Ganti Pemain {game.subCount?.[game.userSide] || 0}/3</button>
+            <button className="ghost" disabled={game.ended} onClick={() => setView("gameplan")}>📋 Tactical View</button>
+            <button className="dangerBtn" disabled={game.ended} onClick={() => onAction({ type: "surrender" })}>🏳️ Surrender 0:3</button>
+          </div>
+        </Card>
+        <ManagerSimTeamPanel game={game} side="away" view={view} />
+      </div>
+      <div className="managerSimLower">
+        <Card className="quickSimFeed managerFeed"><h3>Cuplikan Live</h3><div className="simTimeline">{game.history.slice(0, 12).map((h, i) => <div key={`${h.minute}-${i}`} className={i === 0 ? "hot" : ""}><small>{h.minute}'</small><b>{h.icon}</b><p>{h.text}</p></div>)}</div></Card>
+        <Card><h3>Progress Aksi Berikutnya</h3>{due.length ? <div className="nextSimMoments">{due.map((ev) => <p key={ev.id}><b>{ev.min}'</b> {ev.type === "goal" ? "Potensi gol" : ev.type === "injury" ? "Risiko cedera" : ev.type === "sub" ? "Rencana pergantian" : ev.type === "yellow" || ev.type === "red" ? "Duel keras/kartu" : "Serangan/shot"} · {sideLabel(ev.side)}</p>)}</div> : <p className="muted">Menunggu aksi berikutnya...</p>}<div className="infoGrid"><span>Pergantian Home</span><b>{game.subCount?.home || 0}/3</b><span>Pergantian Away</span><b>{game.subCount?.away || 0}/3</b><span>Mode</span><b>{game.sim?.paused ? "Paused" : game.ended ? "Full Time" : "Live AI"}</b></div></Card>
+        <Card><h3>Stamina Tim Kamu</h3><StaminaMiniList game={game} side={game.userSide} /></Card>
+      </div>
     </div>
     {subOpen && <RealSubModal game={game} selected={selected} setSelectedId={setSelectedId} onAction={onAction} onClose={() => setSubOpen(false)} />}
   </Section>;

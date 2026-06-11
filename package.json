@@ -1,7 +1,7 @@
 {
-  "name": "bola-catur-arena-v20-hardening-full-qa",
+  "name": "bola-catur-arena-v21-manager-simulation-ui",
   "private": true,
-  "version": "20.0.0",
+  "version": "21.0.0",
   "type": "module",
   "engines": {
     "node": ">=20 <23",
