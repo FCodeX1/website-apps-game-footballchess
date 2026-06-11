@@ -1,0 +1,26 @@
+BOLA CATUR ARENA V24 - FORMASI & SIMULASI LANDSCAPE POLISH
+
+Perubahan utama:
+1. Menu Formasi diperbagus:
+   - Mini pitch dibuat lebih jelas, lebih modern, dan tetap portrait internal untuk tactical board.
+   - Slot pemain sekarang lebih mudah dipahami dengan warna per lini:
+     GK, belakang, tengah, depan.
+   - Ada ringkasan formasi aktif.
+   - Ada spotlight pemain/slot yang sedang dipilih.
+   - Kandidat pengganti sekarang diberi label kecocokan: Sangat cocok / Cocok / Darurat.
+
+2. Tampilan lapangan simulasi diperbagus:
+   - Pitch simulasi dijaga landscape.
+   - Garis lapangan diperjelas.
+   - Goal dibuat lebih jelas secara horizontal (atas-bawah), dengan visual net.
+   - Ditambah six-yard box, penalty spot, center spot, dan penalty arc.
+   - Token pemain dibuat lebih rapi, informatif, dan mudah dibaca.
+   - Nama pemain dan bar energi lebih jelas.
+
+3. QA:
+   - npm run build: PASS
+   - npm run qa: PASS
+
+Catatan:
+- Update ini fokus pada UI/UX formasi dan visualisasi lapangan simulasi.
+- Database liga/roster dari versi sebelumnya tetap dipertahankan.

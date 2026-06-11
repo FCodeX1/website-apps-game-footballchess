@@ -1,0 +1,39 @@
+UPDATE SUPER BESAR V23 - LANDSCAPE + LEAGUE-FIRST CAREER + ROSTER SEARCH
+
+Fokus update:
+1. Tampilan dibuat landscape-first.
+   - Board match tidak lagi terasa portrait penuh; layout utama dipaksa lebih lebar.
+   - Manager simulation/pitch tetap 16:9.
+   - Career setup dibuat dua langkah yang mudah dibaca: pilih liga dulu, lalu pilih klub.
+   - Grid klub/league dibuat scroll yang rapi agar tidak ribet.
+
+2. Alur awal career diubah total.
+   - Sebelum mulai main, user wajib memilih liga terlebih dahulu.
+   - Setelah liga dipilih, daftar klub otomatis hanya klub dari liga tersebut.
+   - Championship sekarang mode liga khusus; tidak otomatis bercampur dengan Premier League.
+   - Jika user pilih Premier League, yang muncul hanya klub Premier League.
+   - Jika user pilih Championship, yang muncul hanya klub Championship mode.
+
+3. Liga real-world berjalan paralel.
+   - Premier League, LaLiga, Bundesliga, Ligue 1, Saudi Pro League, BRI Super League, Serie A bonus, dan Championship berjalan sebagai leagueKey sendiri.
+   - Klasemen, fixture, kompetisi besar, dan news memakai liga masing-masing.
+   - Promosi/degradasi artificial lama dari Championship -> Liga 3 -> Liga 2 -> Liga 1 dicabut agar liga dunia nyata tidak kacau.
+
+4. Roster seed lebih rapi sesuai liga/klub.
+   - Setiap klub mengambil seed nama pemain berdasarkan clubKey dari database real-world/LAN squad.
+   - Generator tetap melengkapi skuad sampai 30 pemain agar gameplay stabil dan fair.
+   - Balancing OVR sekarang mengikuti target liga real-world, bukan tier lama liga1/liga2/liga3.
+
+5. Search dan UX data klub/pemain diperbaiki.
+   - Tab Klub sekarang punya search untuk klub, liga, manager, gaya main, dan nama pemain seed roster.
+   - Tab Klub punya filter cepat per liga.
+   - Kartu klub menampilkan contoh nama seed roster agar mudah dicek.
+   - LAN club grouping dibuat berdasarkan liga agar pilihan klub tidak berantakan.
+
+6. QA lokal:
+   - npm run build: PASS
+   - npm run qa: PASS
+
+Catatan data:
+- Data tetap berupa snapshot/simulasi gameplay, bukan API live transfer resmi.
+- Referensi yang dipakai/diarahkan: official Premier League clubs/table, official LaLiga clubs 2025/26, ILeague BRI Super League 2025-26, SPL/Transfermarkt/SPL-style league reference, Transfermarkt league and squad overview untuk cross-check roster/klub.

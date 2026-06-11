@@ -55,12 +55,16 @@ const COACH_PRESETS = [
 ];
 
 const LEAGUES = [
-  { key: "liga1", name: "Liga 1", short: "L1", level: 1, target: 86, promo: 0, relegation: 3, prize: { champion: 900000, top5: 420000, stay: 180000 }, desc: "Liga tertinggi; klub kuat, target kontinental, tekanan tinggi." },
-  { key: "liga2", name: "Liga 2", short: "L2", level: 2, target: 79, promo: 3, relegation: 3, prize: { champion: 520000, top5: 260000, stay: 95000 }, desc: "Liga penantang; OVR inti sekitar 78+ dan promosi menjadi target besar." },
-  { key: "liga3", name: "Liga 3", short: "L3", level: 3, target: 72, promo: 3, relegation: 3, prize: { champion: 310000, top5: 150000, stay: 60000 }, desc: "Liga berkembang; akademi dan transfer murah sangat penting." },
-  { key: "championship", name: "Liga Championship", short: "LC", level: 4, target: 68, promo: 3, relegation: 0, prize: { champion: 180000, top5: 85000, stay: 35000 }, desc: "Liga paling bawah; semua career user dimulai dari sini." },
+  { key: "premier-league", name: "Premier League", short: "PL", level: 1, target: 86, promo: 0, relegation: 0, prize: { champion: 900000, top5: 420000, stay: 180000 }, desc: "Liga Inggris top tier: hanya klub Premier League. Tidak bercampur dengan Championship." },
+  { key: "laliga", name: "LaLiga", short: "LL", level: 1, target: 85, promo: 0, relegation: 0, prize: { champion: 880000, top5: 400000, stay: 170000 }, desc: "Liga Spanyol top tier: klub LaLiga berjalan sebagai liga sendiri." },
+  { key: "bundesliga", name: "Bundesliga", short: "BL", level: 1, target: 84, promo: 0, relegation: 0, prize: { champion: 850000, top5: 380000, stay: 160000 }, desc: "Liga Jerman top tier: 18 klub berjalan sendiri dengan jadwal liga terpisah." },
+  { key: "ligue-1", name: "Ligue 1", short: "L1", level: 1, target: 83, promo: 0, relegation: 0, prize: { champion: 820000, top5: 360000, stay: 150000 }, desc: "Liga Prancis top tier: 18 klub berjalan sebagai kompetisi mandiri." },
+  { key: "saudi-pro-league", name: "Saudi Pro League", short: "SPL", level: 1, target: 82, promo: 0, relegation: 0, prize: { champion: 780000, top5: 340000, stay: 145000 }, desc: "Liga Arab Saudi: 18 klub, bintang besar tetap di liga asalnya." },
+  { key: "bri-super-league", name: "BRI Super League", short: "BRI", level: 1, target: 74, promo: 0, relegation: 0, prize: { champion: 520000, top5: 230000, stay: 95000 }, desc: "Liga Indonesia: klub BRI Super League/I.League berjalan sendiri." },
+  { key: "serie-a", name: "Serie A", short: "SA", level: 1, target: 84, promo: 0, relegation: 0, prize: { champion: 840000, top5: 370000, stay: 155000 }, desc: "Bonus kompatibilitas: klub Serie A yang sudah ada tetap punya liga sendiri." },
+  { key: "championship", name: "Championship", short: "CH", level: 2, target: 70, promo: 0, relegation: 0, prize: { champion: 300000, top5: 140000, stay: 60000 }, desc: "Mode khusus Championship. Hanya tampil bila dipilih di awal, bukan otomatis bercampur dengan Premier League." },
 ];
-const LEAGUE_ORDER = ["liga1", "liga2", "liga3", "championship"];
+const LEAGUE_ORDER = ["premier-league", "laliga", "bundesliga", "ligue-1", "saudi-pro-league", "bri-super-league", "serie-a", "championship"];
 const LEAGUE_BY_KEY = Object.fromEntries(LEAGUES.map((l) => [l.key, l]));
 const TEAMS_PER_LEAGUE = 12;
 const SEASON_LENGTH_WEEKS = 60;
@@ -78,26 +82,53 @@ function transferWindowLabel(week) {
   const w = TRANSFER_WINDOWS.find((x) => week >= x.from && week <= x.to);
   return w ? `${w.name} (Pekan ${w.from}-${w.to})` : "Transfer window tutup";
 }
+function normalizeLeagueText(value = "") {
+  return String(value).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+}
+const REAL_LEAGUE_NAME_TO_KEY = {
+  "premier league": "premier-league",
+  "laliga": "laliga",
+  "la liga": "laliga",
+  "bundesliga": "bundesliga",
+  "ligue 1": "ligue-1",
+  "saudi pro league": "saudi-pro-league",
+  "bri super league": "bri-super-league",
+  "i league": "bri-super-league",
+  "serie a": "serie-a",
+  "championship": "championship",
+  "english championship": "championship",
+};
+function careerLeagueKeyForClub(def = {}) {
+  if (def.careerLeagueKey && LEAGUE_BY_KEY[def.careerLeagueKey]) return def.careerLeagueKey;
+  const direct = REAL_LEAGUE_NAME_TO_KEY[normalizeLeagueText(def.realLeague || def.league || def.country || "")];
+  return direct && LEAGUE_BY_KEY[direct] ? direct : "championship";
+}
+function careerLeagueChoices() {
+  return LEAGUES.map((league) => ({ ...league, clubCount: CAREER_CLUB_CHOICES.filter((club) => club.leagueKey === league.key).length }));
+}
+function clubsForCareerLeague(leagueKey) {
+  return CAREER_CLUB_CHOICES.filter((club) => club.leagueKey === leagueKey);
+}
 function initialLeagueKeyByIndex(idx, totalTeams = CLUB_DATA.length) {
   const perLeague = Math.max(TEAMS_PER_LEAGUE, Math.ceil(totalTeams / LEAGUE_ORDER.length));
-  if (idx < perLeague) return "liga1";
-  if (idx < perLeague * 2) return "liga2";
-  if (idx < perLeague * 3) return "liga3";
-  return "championship";
+  return LEAGUE_ORDER[Math.min(LEAGUE_ORDER.length - 1, Math.floor(idx / perLeague))] || "championship";
 }
 function softOverallForLeague(pos, leagueKey, idx = 0) {
   const target = leagueInfo(leagueKey).target;
   const roleBump = ["GK", "ST", "CAM", "CB"].includes(pos) ? 1 : 0;
   const topBump = idx < 14 ? 1 : idx < 22 ? 0 : -2;
-  const spread = leagueKey === "liga1" ? rng(-3, 3) : leagueKey === "liga2" ? rng(-4, 3) : rng(-5, 4);
-  return clamp(target + roleBump + topBump + spread, 52, leagueKey === "liga1" ? 91 : leagueKey === "liga2" ? 84 : leagueKey === "liga3" ? 78 : 74);
+  const spread = target >= 84 ? rng(-3, 3) : target >= 80 ? rng(-4, 3) : target >= 74 ? rng(-5, 4) : rng(-6, 4);
+  const ceiling = target >= 85 ? 91 : target >= 83 ? 89 : target >= 80 ? 86 : target >= 74 ? 80 : 76;
+  return clamp(target + roleBump + topBump + spread, 52, ceiling);
 }
 function rebalancePlayerForLeague(player, leagueKey, idx = 0) {
   const desired = softOverallForLeague(player.pos, leagueKey, idx);
   const old = Math.max(1, player.overall || desired);
   const factor = desired / old;
-  const capPotential = leagueKey === "liga1" ? 93 : leagueKey === "liga2" ? 88 : leagueKey === "liga3" ? 84 : 82;
-  const rare = (player.rarePotential || Math.random() < (leagueKey === "liga1" ? 0.018 : 0.012)) && desired < 90;
+  const target = leagueInfo(leagueKey).target;
+  const capPotential = target >= 85 ? 93 : target >= 83 ? 91 : target >= 80 ? 88 : target >= 74 ? 84 : 82;
+  const rareChance = target >= 84 ? 0.018 : target >= 78 ? 0.014 : 0.01;
+  const rare = (player.rarePotential || Math.random() < rareChance) && desired < 90;
   const next = { ...player, overall: desired, rarePotential: rare };
   ["pace", "shoot", "pass", "dribble", "defend", "stamina"].forEach((k) => { next[k] = clamp(Math.round((player[k] || old) * factor + rng(-2, 2)), 10, 99); });
   next.potential = clamp(Math.max(desired, desired + (rare ? rng(6, 12) : rng(1, 6))), desired, rare ? Math.max(capPotential, desired + 1) : Math.min(capPotential, 86));
@@ -115,13 +146,18 @@ function sortLeagueTeams(teams, leagueKey) {
   return teams.filter((t) => t.leagueKey === leagueKey).slice().sort((a, b) => b.pts - a.pts || (b.gf - b.ga) - (a.gf - a.ga) || b.gf - a.gf || teamPower(b) - teamPower(a));
 }
 function groupedLeagueTables(teams) {
-  return LEAGUE_ORDER.map((key) => ({ ...leagueInfo(key), teams: sortLeagueTeams(teams, key) }));
+  return LEAGUE_ORDER.map((key) => ({ ...leagueInfo(key), teams: sortLeagueTeams(teams, key) })).filter((league) => league.teams.length > 0);
 }
 function seniorPlayers(team) { return (team?.players || []).filter((p) => !p.academy && !p.pendingArrival); }
 function academyPlayers(team) { return (team?.players || []).filter((p) => p.academy); }
 function teamWeeklyWage(team) { return seniorPlayers(team).reduce((sum, p) => sum + Math.max(250, p.wage || 0), 0); }
 function maxAiBudgetForLeague(leagueKey) {
-  return ({ liga1: 1300000, liga2: 680000, liga3: 360000, championship: 190000 })[leagueKey] || 220000;
+  const target = leagueInfo(leagueKey).target;
+  if (target >= 85) return 1300000;
+  if (target >= 83) return 1100000;
+  if (target >= 80) return 900000;
+  if (target >= 74) return 520000;
+  return 260000;
 }
 function starChaos(team) {
   const stars90 = seniorPlayers(team).filter((p) => p.overall >= 90).length;
@@ -276,18 +312,8 @@ const SPECIAL_CUP_CONFIGS = [
   { competition: "clubWorld", cupName: "Club World Series", icon: "🌍", weeks: [46, 59], stages: ["Semi Final", "Final"], minRank: 2, prize: 750000, prestige: 8, note: "Turnamen global klub elite." },
   { competition: "superCup", cupName: "Super Cup", icon: "⚡", weeks: [60], stages: ["Final"], minRank: 1, prize: 650000, prestige: 7, note: "Final bergengsi untuk juara liga sementara." },
 ];
-const LEAGUE_CHAMPIONSHIP_NAMES = {
-  liga1: "Elite Shield Championship",
-  liga2: "Promotion Masters Championship",
-  liga3: "Rising League Championship",
-  championship: "Founders Road Championship",
-};
-const LEAGUE_CHAMPIONSHIP_IMPACT = {
-  liga1: "Badge ESC, sponsor elite, gengsi global, dan daya tarik pemain bintang naik.",
-  liga2: "Badge PMC, promosi makin dipercaya, fan trust naik, dan sponsor regional tertarik.",
-  liga3: "Badge RLC, reputasi pembangunan naik, akademi lebih mudah viral.",
-  championship: "Badge FRC, tanda klub pendaki dari bawah, morale dan fans lokal ikut naik.",
-};
+const LEAGUE_CHAMPIONSHIP_NAMES = Object.fromEntries(LEAGUES.map((l) => [l.key, `${l.name} Championship Race`]));
+const LEAGUE_CHAMPIONSHIP_IMPACT = Object.fromEntries(LEAGUES.map((l) => [l.key, `${l.name}: liga mandiri, jadwal berjalan bersamaan, roster seed mengikuti klub/liga asal.`]));
 const WORLD_CUP_CHAMPIONSHIP = { competition: "worldCupChampionship", cupName: "World Cup Championship", icon: "🏆🌍", weeks: [6, 30, 45, 60], stages: ["Group Clash", "Quarter Final", "Semi Final", "Final"], minRank: 3, prize: 1800000, prestige: 12, note: "Spesial tiap 3 season: top 3 tiap liga + 15 klub undangan dunia." };
 function worldCupSeasonActive(season) { return season === 1 || season % 3 === 1; }
 function specialCupByWeek(week, season) {
@@ -507,11 +533,43 @@ const CLUB_DATA = [
   [48, "Probolinggo Comets", "Probolinggo", "#9b5de5", 24500, "Chaos"],
 ];
 
-const CAREER_CLUB_CHOICES = (Array.isArray(REAL_WORLD_CLUBS) && REAL_WORLD_CLUBS.length
-  ? REAL_WORLD_CLUBS.map((c, idx) => [c.id ?? idx + 1, c.name, c.city || `${c.country || "World"} · ${c.league || "Real League"}`, c.color, c.fans || 30000, c.style])
-  : CLUB_DATA);
-
-
+const CHAMPIONSHIP_CAREER_CLUBS = CLUB_DATA.slice(0, 24).map(([id, name, city, color, fans, style], idx) => ({
+  id: 8001 + idx,
+  key: `championship-${id}`,
+  name,
+  city,
+  color,
+  fans,
+  style,
+  country: "Inggris",
+  league: "Championship",
+  realLeague: "Championship",
+  careerLeagueKey: "championship",
+  manager: "Manager Career",
+  overview: "Klub Championship khusus mode pilihan liga Championship. Tidak tercampur dengan Premier League.",
+}));
+const CAREER_REAL_CLUB_SOURCE = Array.isArray(REAL_WORLD_CLUBS) && REAL_WORLD_CLUBS.length ? REAL_WORLD_CLUBS : [];
+const CAREER_CLUB_SOURCE = [
+  ...CAREER_REAL_CLUB_SOURCE,
+  ...CHAMPIONSHIP_CAREER_CLUBS,
+];
+const CAREER_CLUB_CHOICES = CAREER_CLUB_SOURCE.map((c, idx) => {
+  const id = c.id ?? idx + 1;
+  const leagueKey = careerLeagueKeyForClub(c);
+  return {
+    id,
+    key: c.key || `club-${id}`,
+    name: c.name,
+    city: c.city || c.country || leagueName(leagueKey),
+    color: c.color || "#2a9d8f",
+    fans: c.fans || 30000,
+    style: c.style || "Balanced",
+    leagueKey,
+    league: c.realLeague || c.league || leagueName(leagueKey),
+    manager: c.manager || "",
+    overview: c.overview || "",
+  };
+});
 const LAN_REAL_CLUBS = [
   { key: "man-city", name: "Manchester City", country: "Inggris", color: "#6cabdd", style: "Possession" },
   { key: "arsenal", name: "Arsenal", country: "Inggris", color: "#ef0107", style: "High Press" },
@@ -1071,20 +1129,16 @@ function fairClubAverage(team) {
   const core = (team.players || []).slice().sort((a, b) => b.overall - a.overall).slice(0, 18);
   return Math.round(core.reduce((sum, p) => sum + p.overall, 0) / (core.length || 1));
 }
-function applyUserClubChoice(teams, selectedClubId) {
+function applyUserClubChoice(teams, selectedClubId, selectedLeagueKey = null) {
   const chosenId = Number(selectedClubId) || MY_TEAM_ID;
+  const chosenOriginal = teams.find((team) => team.id === chosenId) || teams.find((team) => team.leagueKey === selectedLeagueKey) || teams[0];
+  const chosenLeagueKey = selectedLeagueKey && LEAGUE_BY_KEY[selectedLeagueKey] ? selectedLeagueKey : (chosenOriginal?.leagueKey || "premier-league");
   const swapped = teams.map((team) => {
-    if (team.id === chosenId) return { ...team, id: MY_TEAM_ID, budget: INITIAL_CASH, originalClubId: chosenId };
+    if (team.id === chosenId) return { ...team, id: MY_TEAM_ID, budget: INITIAL_CASH, originalClubId: chosenId, leagueKey: chosenLeagueKey, leagueName: leagueName(chosenLeagueKey), leagueLevel: leagueInfo(chosenLeagueKey).level };
     if (team.id === MY_TEAM_ID && chosenId !== MY_TEAM_ID) return { ...team, id: chosenId, budget: INITIAL_CASH, originalClubId: MY_TEAM_ID };
     return team;
-  }).map((team) => ({ ...team, rivalId: team.rivalId === chosenId ? MY_TEAM_ID : team.rivalId === MY_TEAM_ID ? chosenId : team.rivalId, players: team.players.map((p) => ({ ...p, teamId: team.id })) }));
-  const userTeam = swapped.find((t) => t.id === MY_TEAM_ID);
-  const others = swapped.filter((t) => t.id !== MY_TEAM_ID);
-  const slots = [
-    ...Array(12).fill("liga1"), ...Array(12).fill("liga2"), ...Array(12).fill("liga3"), ...Array(11).fill("championship"),
-  ];
-  const arrangedOthers = others.slice().sort((a, b) => leagueInfo(a.leagueKey).level - leagueInfo(b.leagueKey).level || teamPower(b) - teamPower(a)).map((team, idx) => rebalanceTeamForLeague(team, slots[idx] || "championship"));
-  const arranged = [rebalanceTeamForLeague(userTeam, "championship"), ...arrangedOthers].map((t) => ({ ...t, players: (t.players || []).map((p) => ({ ...p, teamId: t.id })) }));
+  }).map((team) => ({ ...team, rivalId: team.rivalId === chosenId ? MY_TEAM_ID : team.rivalId === MY_TEAM_ID ? chosenId : team.rivalId, players: (team.players || []).map((p) => ({ ...p, teamId: team.id })) }));
+  const arranged = swapped.map((team) => rebalanceTeamForLeague(team, team.id === MY_TEAM_ID ? chosenLeagueKey : (team.leagueKey || "championship"))).map((t) => ({ ...t, players: (t.players || []).map((p) => ({ ...p, teamId: t.id })) }));
   return ensureUserAcademyInTeams(arranged, 1, 1, 6);
 }
 function viralCandidate(teams) {
@@ -1123,9 +1177,9 @@ function newsItems({ teams, week, market, cash, storyLog, log, myTeam, worldNews
 }
 
 function clubPrestige(teamId) {
-  const idx = CAREER_CLUB_CHOICES.findIndex((c) => c[0] === teamId);
+  const idx = CAREER_CLUB_CHOICES.findIndex((c) => Number(c.id) === Number(teamId));
   if (idx < 0) return 1;
-  return clamp(1.18 - idx * 0.008, 0.82, 1.22);
+  return clamp(1.18 - idx * 0.0035, 0.82, 1.22);
 }
 function positionValueMultiplier(pos) {
   return ({ GK: 0.92, CB: 0.96, LB: 0.97, RB: 0.97, CDM: 1.02, CM: 1.06, CAM: 1.14, LM: 1.04, RM: 1.04, LW: 1.16, RW: 1.16, ST: 1.22 })[pos] || 1;
@@ -1240,9 +1294,9 @@ function lineForFormation(formation) {
 }
 function mirror(slot) { return { ...slot, y: BOARD_ROWS - 1 - slot.y }; }
 function buildClubs() {
-  const sourceClubs = Array.isArray(REAL_WORLD_CLUBS) && REAL_WORLD_CLUBS.length
-    ? REAL_WORLD_CLUBS
-    : CLUB_DATA.map(([id, name, city, color, fans, style]) => ({ id, key: `club-${id}`, name, city, color, fans, style, country: city, league: "Virtual League", manager: "", overview: "" }));
+  const sourceClubs = CAREER_CLUB_SOURCE.length
+    ? CAREER_CLUB_SOURCE
+    : CLUB_DATA.map(([id, name, city, color, fans, style], idx) => ({ id, key: `club-${id}`, name, city, color, fans, style, country: city, league: leagueName(initialLeagueKeyByIndex(idx)), careerLeagueKey: initialLeagueKeyByIndex(idx), manager: "", overview: "" }));
   const clubs = sourceClubs.map((def, idx) => {
     const id = def.id ?? idx + 1;
     const name = def.name || `Club ${id}`;
@@ -1250,7 +1304,7 @@ function buildClubs() {
     const color = def.color || ["#e63946", "#2a9d8f", "#4361ee", "#e9c46a"][idx % 4];
     const fans = def.fans || (30000 + idx * 700);
     const style = def.style || pick(AI_STYLE_POOL);
-    const leagueKey = def.careerLeagueKey || initialLeagueKeyByIndex(idx, sourceClubs.length);
+    const leagueKey = careerLeagueKeyForClub(def);
     return {
       id, clubKey: def.key || `club-${id}`, name, city, color, fans, style, realWorld: Boolean(def.league), realLeague: def.realLeague || def.league || "Virtual League", realManager: def.manager || "", clubOverview: def.overview || "", sourceUrl: def.sourceUrl || "",
       leagueKey, leagueLevel: leagueInfo(leagueKey).level, leagueName: leagueName(leagueKey),
@@ -2511,25 +2565,30 @@ function rtMoveToward(piece, tx, ty, dt, sprint = false, onBall = false) {
   const dy = targetY - oy;
   const dist = Math.hypot(dx, dy);
   if (dist < 0.045) {
-    piece.vx = (piece.vx || 0) * 0.68;
-    piece.vy = (piece.vy || 0) * 0.68;
+    piece.vx = (piece.vx || 0) * 0.64;
+    piece.vy = (piece.vy || 0) * 0.64;
+    piece.animSpeed = Math.max(0, (piece.animSpeed || 0) * 0.6);
     return;
   }
   const speed = rtSpeed(piece, sprint, onBall);
   const maxStep = speed * dt;
-  const desiredVx = (dx / dist) * speed;
-  const desiredVy = (dy / dist) * speed;
-  const turnSharpness = onBall ? 0.56 : (piece.role === "GK" ? 0.52 : 0.66);
+  const agility = clamp((((piece.dribble || 60) * 0.52) + ((piece.pace || 60) * 0.48)) / 100, 0.52, 1.18);
+  const arrival = dist < 4.5 ? clamp(0.38 + dist / 6.8, 0.36, 1) : 1;
+  const desiredSpeed = speed * arrival;
+  const desiredVx = (dx / dist) * desiredSpeed;
+  const desiredVy = (dy / dist) * desiredSpeed;
+  const turnSharpness = clamp((onBall ? 0.42 : piece.role === "GK" ? 0.40 : 0.48) + agility * 0.18 - (sprint ? 0.04 : 0), 0.36, 0.78);
   piece.vx = (piece.vx || 0) * (1 - turnSharpness) + desiredVx * turnSharpness;
   piece.vy = (piece.vy || 0) * (1 - turnSharpness) + desiredVy * turnSharpness;
   const vl = Math.max(0.001, Math.hypot(piece.vx, piece.vy));
-  const step = Math.min(dist, maxStep, vl * dt);
+  const step = Math.min(dist, maxStep, Math.max(maxStep * 0.24, vl * dt));
   piece.rx = clampFieldX(ox + (piece.vx / vl) * step);
   piece.ry = clampFieldY(oy + (piece.vy / vl) * step);
-  if (step > 0.015) {
+  if (step > 0.012) {
     piece.faceX = piece.vx / vl;
     piece.faceY = piece.vy / vl;
   }
+  piece.animSpeed = clamp(step / Math.max(0.001, maxStep), 0, 1.25);
   piece.x = clamp(Math.round(((piece.rx - 4) / (FIELD_W - 8)) * (BOARD_COLS - 1)), 0, BOARD_COLS - 1);
   piece.y = clamp(Math.round(((piece.ry - 3) / (FIELD_H - 6)) * (BOARD_ROWS - 1)), 0, BOARD_ROWS - 1);
   piece.energy = clamp((piece.energy ?? 80) - (sprint ? 0.22 : 0.045) * dt * (onBall ? 1.12 : 1), 0, 100);
@@ -3557,25 +3616,27 @@ function rtAutoDecideWithBall(game, carrier) {
   const passBias = rtPassDecisionBias(game, carrier, passTarget, shot) + rtRoleIntent(carrier).pass * 0.24 + passChoice.adaptive.protectBias * 4;
   const style = sideStyle(game, carrier.side);
   const safeBuildStyle = ["Tiki Taka", "Possession", "Vertical Tiki Taka"].includes(style);
-  const forcedPass = carrier.role === "GK" || pressureCount >= 2 || (pressureCount >= 1 && passRisk < 25) || (passTarget && inFinalThird && forward > 6 && passRisk < (passChoice.adaptive.urgent ? 34 : 29)) || (safeBuildStyle && passBias > (passChoice.adaptive.urgent ? 3 : 8));
+  const directWindow = passTarget && forward > 4 && passRisk < 30 && pressureCount >= 1;
+  const forcedPass = carrier.role === "GK" || pressureCount >= 2 || (pressureCount >= 1 && passRisk < 25) || (passTarget && inFinalThird && forward > 6 && passRisk < (passChoice.adaptive.urgent ? 34 : 29)) || (safeBuildStyle && passBias > (passChoice.adaptive.urgent ? 3 : 8)) || directWindow;
   const shootThreshold = passChoice.adaptive.urgent ? 54 : passChoice.adaptive.protectBias > 0.6 ? 68 : 62;
 
   if (shot.can && (!passTarget || (shot.chance > shootThreshold && passBias < 11 + passChoice.adaptive.riskBias * 5) || (shot.chance > 54 && passRisk > 31) || (pressureCount === 0 && shot.chance > shootThreshold - 5))) {
-    carrier.aiCooldown = 1.05;
+    carrier.aiCooldown = 0.88;
     rtShoot(game, carrier);
     return;
   }
   if (passTarget && forcedPass) {
-    carrier.aiCooldown = 0.92 + Math.min(0.72, rtDist(carrier, passTarget) / 44);
+    carrier.aiCooldown = 0.64 + Math.min(0.58, rtDist(carrier, passTarget) / 48);
     rtPass(game, carrier, passTarget, throughIntent && forward > 5 && passRisk < (passChoice.adaptive.urgent ? 35 : 29) && passTarget.role !== "CB");
     return;
   }
 
   // Ball carry profesional: pilih jalur paling kosong, bukan random ke pojok.
   const dribble = rtBestDribbleTarget(game, carrier);
-  carrier.targetX = dribble.x;
+  const driftX = pressureCount ? clamp((goalCenterX() - carrier.rx) * 0.12, -2.4, 2.4) : 0;
+  carrier.targetX = clampFieldX(dribble.x + driftX);
   carrier.targetY = dribble.y;
-  carrier.aiCooldown = pressureCount ? 0.85 : 1.15;
+  carrier.aiCooldown = pressureCount ? 0.68 : 0.96;
 }
 function rtShouldAutoTackle(game, defender, carrier) {
   if (!defender || !carrier || defender.side === carrier.side || defender.role === "GK") return false;
@@ -4473,16 +4534,12 @@ function endSeasonRollover(teams, season, competitionState = initialCompetitionS
     const champion = table[0];
     if (champion) {
       history.push({ season, competition: league.name, championId: champion.id, championName: champion.name });
-      news.push({ id: `season-${season}-${leagueKey}-champ`, season, week: SEASON_LENGTH_WEEKS, tag: "Juara Liga", icon: "🏆", title: `${champion.name} juara ${league.name}`, body: `Hadiah akhir musim masuk. Promosi/degradasi membuat dunia career tetap hidup.` });
+      news.push({ id: `season-${season}-${leagueKey}-champ`, season, week: SEASON_LENGTH_WEEKS, tag: "Juara Liga", icon: "🏆", title: `${champion.name} juara ${league.name}`, body: `Hadiah akhir musim masuk. Liga tetap mandiri agar Premier League, Championship, LaLiga, Bundesliga, Ligue 1, SPL, BRI, dan Serie A tidak bercampur.` });
     }
   });
-  const promotions = [];
-  const relegations = [];
-  [["championship", "liga3"], ["liga3", "liga2"], ["liga2", "liga1"]].forEach(([from, to]) => {
-    sortLeagueTeams(nextTeams, from).slice(0, 3).forEach((t) => promotions.push({ id: t.id, from, to }));
-    sortLeagueTeams(nextTeams, to).slice(-3).forEach((t) => relegations.push({ id: t.id, from: to, to: from }));
-  });
-  const moveMap = new Map([...promotions, ...relegations].map((m) => [m.id, m.to]));
+  // V23: real-world leagues run in parallel and stay isolated.
+  // Championship is a selectable standalone route, not a feeder tier for Premier League.
+  const moveMap = new Map();
   nextTeams = nextTeams.map((team) => {
     const table = sortLeagueTeams(nextTeams, team.leagueKey);
     const rank = table.findIndex((t) => t.id === team.id) + 1;
@@ -5065,7 +5122,10 @@ function FootballManager() {
   const [friendlyActive, setFriendlyActive] = useState(null);
   const [helpMode, setHelpMode] = useState(false);
   const [aiDifficulty, setAiDifficulty] = useState("Normal");
-  const [selectedClubId, setSelectedClubId] = useState(MY_TEAM_ID);
+  const defaultCareerLeagueKey = CAREER_CLUB_CHOICES[0]?.leagueKey || "premier-league";
+  const defaultCareerClubId = CAREER_CLUB_CHOICES.find((club) => club.leagueKey === defaultCareerLeagueKey)?.id || MY_TEAM_ID;
+  const [selectedLeagueKey, setSelectedLeagueKey] = useState(defaultCareerLeagueKey);
+  const [selectedClubId, setSelectedClubId] = useState(defaultCareerClubId);
   const [selectedCoachKey, setSelectedCoachKey] = useState("balanced");
   const [worldNews, setWorldNews] = useState([]);
   const [lanOpen, setLanOpen] = useState(false);
@@ -5099,8 +5159,8 @@ function FootballManager() {
   }, []);
 
   const currentSavePayload = useCallback(() => ({
-    competition, teams, week, season, fixtureCalendar, competitionState, seasonHistory, cash, formation, trainingPlan, facilities, seasonStats, claimed, market, log, manager, storyLog, worldNews, lineupOverrides, scoutQueue, pendingTransfers, transferActionWeek, helpMode, aiDifficulty, selectedClubId, selectedCoachKey,
-  }), [aiDifficulty, cash, claimed, competition, facilities, formation, helpMode, lineupOverrides, log, manager, market, pendingTransfers, scoutQueue, seasonStats, storyLog, transferActionWeek, worldNews, teams, trainingPlan, week, selectedClubId, selectedCoachKey]);
+    competition, teams, week, season, fixtureCalendar, competitionState, seasonHistory, cash, formation, trainingPlan, facilities, seasonStats, claimed, market, log, manager, storyLog, worldNews, lineupOverrides, scoutQueue, pendingTransfers, transferActionWeek, helpMode, aiDifficulty, selectedLeagueKey, selectedClubId, selectedCoachKey,
+  }), [aiDifficulty, cash, claimed, competition, facilities, formation, helpMode, lineupOverrides, log, manager, market, pendingTransfers, scoutQueue, seasonStats, storyLog, transferActionWeek, worldNews, teams, trainingPlan, week, selectedLeagueKey, selectedClubId, selectedCoachKey]);
 
   useEffect(() => {
     if (!gameStarted || !myTeam) return;
@@ -5122,22 +5182,22 @@ function FootballManager() {
     setSeasonStats({ ...defaultSeasonStats(), ...(data.seasonStats || {}) }); setClaimed(data.claimed || []);
     setMarket(data.market ? cleanMarket(data.market, migratedTeams) : makeTransferMarket(migratedTeams, loadedFacilities.academy || 1)); setLog(data.log || []); setManager(data.manager || { name: "Coach Arjuna", reputation: 1, boardTrust: 70, fanTrust: 70 });
     setStoryLog(data.storyLog || []); setWorldNews(hadNoAcademy ? [{ id: `academy-migration-${Date.now()}`, week: data.week || 1, tag: "Youth Intake", icon: "🌱", title: "Akademi membuka intake baru", body: "Save lama tidak punya pemain akademi. Sistem baru otomatis menambahkan youth academy agar tombol Panggil ke Skuad Utama muncul." }, ...(data.worldNews || [])].slice(0, 80) : (data.worldNews || [])); setLineupOverrides(data.lineupOverrides || {}); setHelpMode(Boolean(data.helpMode)); setAiDifficulty(data.aiDifficulty || "Normal");
-    setSelectedClubId(data.selectedClubId || MY_TEAM_ID); setSelectedCoachKey(data.selectedCoachKey || "balanced"); setPendingTransfers(data.pendingTransfers || []); setTransferActionWeek(data.transferActionWeek || null);
+    setSelectedLeagueKey(data.selectedLeagueKey || (data.teams || []).find((t) => t.id === MY_TEAM_ID)?.leagueKey || defaultCareerLeagueKey); setSelectedClubId(data.selectedClubId || MY_TEAM_ID); setSelectedCoachKey(data.selectedCoachKey || "balanced"); setPendingTransfers(data.pendingTransfers || []); setTransferActionWeek(data.transferActionWeek || null);
     setScoutQueue(data.scoutQueue || []); setScoutUsed(0); setActive(null); setPreMatch(null); setSelectedId(null); setSelectedPlayer(null); setGameStarted(true); setTab("dashboard");
     notify(`${source === "file" ? "Save file" : "Save manual"} berhasil dimuat${data.migratedFrom && data.migratedFrom !== SAVE_VERSION ? ` + dimigrasikan dari v${data.migratedFrom}` : ""}.`, "success");
   }, [notify]);
 
   const startNewCareer = useCallback(() => {
     const rawTeams = buildClubs();
-    const freshTeams = applyUserClubChoice(rawTeams, selectedClubId);
+    const freshTeams = applyUserClubChoice(rawTeams, selectedClubId, selectedLeagueKey);
     setCompetition("managerWorld"); setTeams(freshTeams); setWeek(1); setSeason(1); setFixtureCalendar(buildLeagueFixtures(freshTeams, 1)); setCompetitionState(initialCompetitionState(1)); setSeasonHistory([]); setCash(INITIAL_CASH); setFormation("4-3-3"); setTrainingPlan("balanced");
     setFacilities({ stadium: 1, training: 1, academy: 1, medical: 1, merchandise: 1, sponsor: 1 });
     setSeasonStats({ homeWins: 0, derbyWins: 0, goals: 0, youthDeveloped: 0 }); setClaimed([]); setMarket(makeTransferMarket(freshTeams, 1)); setLog([]);
-    setManager(managerFromPreset(selectedCoachKey)); setStoryLog([{ id: `welcome-${Date.now()}`, week: 1, title: `Media menyambut ${managerFromPreset(selectedCoachKey).name}`, choices: ["Jawab tenang", "Janji sepak bola menyerang", "Fokus ke perkembangan skuad"] }]); setWorldNews([{ id: `world-${Date.now()}`, week: 1, tag: "World Start", icon: "🌍", title: "Semua klub mulai fair", body: "Rata-rata skuad dibuat sekitar 70. AI club growth akan membuat klub lain latihan, transfer, ubah taktik, dan menemukan hidden talent setiap pekan." }]); setLineupOverrides({});
+    setManager(managerFromPreset(selectedCoachKey)); setStoryLog([{ id: `welcome-${Date.now()}`, week: 1, title: `Media menyambut ${managerFromPreset(selectedCoachKey).name}`, choices: ["Jawab tenang", "Janji sepak bola menyerang", "Fokus ke perkembangan skuad"] }]); setWorldNews([{ id: `world-${Date.now()}`, week: 1, tag: "World Start", icon: "🌍", title: "Liga real-world berjalan bersamaan", body: `${leagueName(selectedLeagueKey)} dipilih sebagai liga utama kamu. Liga lain tetap berjalan paralel, dan Championship hanya aktif sebagai jalur pilihan sendiri.` }]); setLineupOverrides({});
     setScoutQueue([]); setScoutUsed(0); setPendingTransfers([]); setTransferActionWeek(null); setActive(null); setPreMatch(null); setSelectedId(null); setSelectedPlayer(null); setTab("dashboard"); setGameStarted(true);
     const chosen = freshTeams.find((t) => t.id === MY_TEAM_ID);
     notify(`Career baru: ${chosen?.name || "Klub"}, coach ${managerFromPreset(selectedCoachKey).name}. Mode bantuan ${helpMode ? "aktif" : "mati"}, AI ${aiDifficulty}.`, "success");
-  }, [aiDifficulty, competition, helpMode, notify, selectedClubId, selectedCoachKey]);
+  }, [aiDifficulty, competition, helpMode, notify, selectedLeagueKey, selectedClubId, selectedCoachKey]);
 
   const startTutorial = useCallback(() => {
     const demoTeams = buildClubs().slice(0, 2);
@@ -5789,7 +5849,7 @@ function FootballManager() {
   if (!gameStarted) {
     return <div className="appShell landingShell">
       {notice && <Notice notice={notice} />}
-      <LandingScreen startNewCareer={startNewCareer} startTutorial={startTutorial} startFriendly={startFriendly} openLan={() => setLanOpen(true)} loadNow={loadNow} importSaveFile={importSaveFile} helpMode={helpMode} setHelpMode={setHelpMode} aiDifficulty={aiDifficulty} setAiDifficulty={setAiDifficulty} selectedClubId={selectedClubId} setSelectedClubId={setSelectedClubId} selectedCoachKey={selectedCoachKey} setSelectedCoachKey={setSelectedCoachKey} />
+      <LandingScreen startNewCareer={startNewCareer} startTutorial={startTutorial} startFriendly={startFriendly} openLan={() => setLanOpen(true)} loadNow={loadNow} importSaveFile={importSaveFile} helpMode={helpMode} setHelpMode={setHelpMode} aiDifficulty={aiDifficulty} setAiDifficulty={setAiDifficulty} selectedLeagueKey={selectedLeagueKey} setSelectedLeagueKey={setSelectedLeagueKey} selectedClubId={selectedClubId} setSelectedClubId={setSelectedClubId} selectedCoachKey={selectedCoachKey} setSelectedCoachKey={setSelectedCoachKey} />
     </div>;
   }
   return <div className="appShell">
@@ -5846,7 +5906,16 @@ function TutorialMode({ active, selectedId, setSelectedId, onAction, tutorialSte
   return <main className="tutorialMain"><section className="tutorialHeader"><div><p className="eyebrow">Tutorial Interaktif</p><h1>{step.title}</h1><p>{step.body}</p></div><div className="tutorialControls"><button className="ghost" onClick={() => setTutorialStep(Math.max(0, tutorialStep - 1))}>Sebelumnya</button><button className="primary" onClick={() => setTutorialStep(Math.min(steps.length - 1, tutorialStep + 1))}>Lanjut Step</button><button className="danger" onClick={onExit}>Keluar Tutorial</button></div></section><MatchTab active={active} selectedId={selectedId} setSelectedId={setSelectedId} onAction={onAction} finishWeek={onExit} startMatch={() => {}} aiPaused={true} setAiPaused={() => {}} helpMode={helpMode} tutorialStep={tutorialStep} /></main>;
 }
 
-function LandingScreen({ startNewCareer, startTutorial, startFriendly, openLan, loadNow, importSaveFile, helpMode, setHelpMode, aiDifficulty, setAiDifficulty, selectedClubId, setSelectedClubId, selectedCoachKey, setSelectedCoachKey }) {
+function LandingScreen({ startNewCareer, startTutorial, startFriendly, openLan, loadNow, importSaveFile, helpMode, setHelpMode, aiDifficulty, setAiDifficulty, selectedLeagueKey, setSelectedLeagueKey, selectedClubId, setSelectedClubId, selectedCoachKey, setSelectedCoachKey }) {
+  const [clubQuery, setClubQuery] = useState("");
+  const leagueChoices = careerLeagueChoices();
+  const leagueClubChoices = clubsForCareerLeague(selectedLeagueKey || leagueChoices[0]?.key || "premier-league");
+  const visibleClubs = leagueClubChoices.filter((club) => !clubQuery.trim() || `${club.name} ${club.city} ${club.league} ${club.manager} ${club.style}`.toLowerCase().includes(clubQuery.toLowerCase())).slice(0, 80);
+  const chooseLeague = (leagueKey) => {
+    setSelectedLeagueKey(leagueKey);
+    const firstClub = clubsForCareerLeague(leagueKey)[0];
+    if (firstClub) setSelectedClubId(firstClub.id);
+  };
   const menus = ["Inbox", "Career", "Calendar", "Berita", "Kompetisi", "Latihan", "Skuad", "Taktik", "Transfer", "Youth", "Champions", "Fasilitas", "Klasemen", "Klub", "AI Growth"];
   return <main className="landingMain">
     <section className="landingHero">
@@ -5859,7 +5928,8 @@ function LandingScreen({ startNewCareer, startTutorial, startFriendly, openLan, 
         <div className="difficultyPicker"><b>AI Difficulty</b>{Object.values(AI_DIFFICULTIES).map((d) => <button key={d.label} className={aiDifficulty === d.label ? "active" : ""} onClick={() => setAiDifficulty(d.label)}>{d.label}<small>{d.desc}</small></button>)}</div>
       </div>
       <div className="preCareerSetup">
-        <div className="setupPanel"><b>Pilih Club Career</b><small>Semua klub dimulai fair: rata-rata skuad inti sekitar 70 dan budget Rp 50.000.</small><div className="clubSelectGrid">{CAREER_CLUB_CHOICES.map(([id, name, city, color]) => <button key={id} className={Number(selectedClubId) === id ? "active" : ""} onClick={() => setSelectedClubId(id)} style={{ borderColor: Number(selectedClubId) === id ? color : undefined }}><span style={{ background: color }} /> <b>{name}</b><small>{city}</small></button>)}</div></div>
+        <div className="setupPanel wideSetup"><b>1. Pilih Liga</b><small>Liga berjalan bersamaan, tapi klub hanya muncul sesuai liga yang kamu pilih. Championship tidak bercampur dengan Premier League.</small><div className="leagueSelectGrid">{leagueChoices.map((league) => <button key={league.key} type="button" className={selectedLeagueKey === league.key ? "active" : ""} onClick={() => chooseLeague(league.key)}><b>{league.name}</b><small>{league.clubCount} klub · target OVR {league.target}</small></button>)}</div></div>
+        <div className="setupPanel wideSetup"><b>2. Pilih Klub Career</b><small>{leagueName(selectedLeagueKey)} · semua klub distabilkan supaya gameplay tetap fair, tetapi nama pemain seed mengikuti roster klub/liga.</small><div className="setupToolbar"><input value={clubQuery} onChange={(e) => setClubQuery(e.target.value)} placeholder="Cari klub / kota / manager / gaya main..." /><span>{visibleClubs.length}/{leagueClubChoices.length} klub</span></div><div className="clubSelectGrid improved">{visibleClubs.map((club) => <button key={club.id} className={Number(selectedClubId) === club.id ? "active" : ""} onClick={() => setSelectedClubId(club.id)} style={{ borderColor: Number(selectedClubId) === club.id ? club.color : undefined }}><span style={{ background: club.color }} /> <b>{club.name}</b><small>{club.league} · {club.style}</small><em>{club.manager || club.city}</em></button>)}</div></div>
         <div className="setupPanel"><b>Pilih Coach</b><small>Coach menentukan identitas awal manager dan trust board/fans.</small><div className="coachSelectGrid">{COACH_PRESETS.map((c) => <button key={c.key} className={selectedCoachKey === c.key ? "active" : ""} onClick={() => setSelectedCoachKey(c.key)}><strong>{c.icon}</strong><b>{c.name}</b><small>{c.style} · {c.desc}</small></button>)}</div></div>
       </div>
       <div className="landingActions"><button className="primary big" onClick={startNewCareer}>Career Manager World</button><button className="ghost big" onClick={openLan}>📡 Multiplayer LAN</button><button className="ghost big" onClick={startFriendly}>🤝 Quick Match</button><button className="ghost big" onClick={startTutorial}>🎓 Coba Tutorial</button><button className="ghost big" onClick={loadNow}>Load Browser Save</button><label className="fileButton big">Load File Save<input type="file" accept="application/json,.json" onChange={(e) => importSaveFile(e.target.files?.[0])} /></label></div>
@@ -5902,7 +5972,8 @@ function playerSideInRoom(room, clientId) {
 }
 function LANClubSelect({ value, otherValue, onChange, disabled = false }) {
   const grouped = LAN_REAL_CLUBS.reduce((acc, club) => {
-    const key = club.country.includes("Inggris") ? "Inggris" : club.country.includes("Spanyol") ? "Spanyol" : club.country.includes("Jerman") ? "Jerman" : club.country.includes("Italia") ? "Italia" : club.country.includes("Arab") ? "Arab Saudi" : club.country.includes("Indonesia") ? "Indonesia" : "Paris/Prancis";
+    const leagueLabel = club.country?.includes(" · ") ? club.country.split(" · ").pop() : (club.country?.match(/\(([^)]+)\)/)?.[1] || club.league || club.country || "Dunia");
+    const key = leagueLabel;
     acc[key] = [...(acc[key] || []), club];
     return acc;
   }, {});
@@ -6091,7 +6162,7 @@ function PreMatchTab({ preMatch, teams, formation, setFormation, lineupOverrides
   return <Section title="Pre-Match Formasi" sub="Klik MAIN PEKAN sekarang masuk ke ruang formasi dulu. Cek starting XI lawan, ubah formasi, ganti pemain dengan cadangan, pilih training plan, lalu mulai match.">
     <div className="preMatchHero card"><div><p className="eyebrow">{fixture.cupName || leagueName(fixture.leagueKey) || "Liga"} · {fixture.stage || "Matchday"}</p><h3>{homeTeam.name} vs {awayTeam.name}</h3><p>{userSide === "home" ? "Kamu HOME" : "Kamu AWAY"} · Lawan gaya {enemyTeam.style} · Kick-off/restart dimulai dari penyerang, tetapi seluruh starting XI tetap di area sendiri sebelum garis tengah.</p></div><div className="preMatchActions"><button className="ghost" onClick={cancel}>Batal</button><button className="ghost big simStart" onClick={beginSim}>📺 Main Simulate</button><button className="primary big" onClick={beginMatch}>Mulai Main</button></div></div>
     <div className="preMatchGrid">
-      <Card><h3>Tim Kamu · {formation}</h3><div className="formationButtons compact">{Object.keys(FORMATIONS).map((f) => <button key={f} className={formation === f ? "active" : ""} onClick={() => { setFormation(f); setSelectedSlot(0); }}>{f}</button>)}</div><MiniPitch formation={formation} lineup={userLineup} selectedSlot={selectedSlot} setSelectedSlot={setSelectedSlot} /></Card>
+      <Card className="formationPanelCard"><h3>Tim Kamu · {formation}</h3><div className="formationButtons compact">{Object.keys(FORMATIONS).map((f) => <button key={f} className={formation === f ? "active" : ""} onClick={() => { setFormation(f); setSelectedSlot(0); }}>{f}</button>)}</div><MiniPitch formation={formation} lineup={userLineup} selectedSlot={selectedSlot} setSelectedSlot={setSelectedSlot} /><FormationSummary formation={formation} lineup={userLineup} selectedSlot={selectedSlot} compact /></Card>
       <Card><h3>Starting XI Kamu</h3><div className="lineupList editable">{userLineup.map(({ player, slot, manual }, idx) => <button key={`${slot.pos}-${player.id}-${idx}`} className={idx === selectedSlot ? "active" : ""} onClick={() => setSelectedSlot(idx)}><b>{slot.pos}</b><span>{player.name}</span><small>{manual ? "Manual" : player.trait}</small><strong>{player.overall}</strong></button>)}</div></Card>
       <Card><h3>Cadangan untuk {selected?.slot.pos}</h3><p className="muted">Pilih pengganti sebelum match dimulai. Cedera/sanksi tidak tampil.</p><div className="benchList">{bench.slice(0, 18).map((p) => <button key={p.id} onClick={() => changePlayer(p.id)}><b>{p.pos}</b><span>{p.name}</span><small>{traitText(p.trait)} · {roleSkillText(p.pos)}</small><strong>{p.overall}</strong></button>)}</div></Card>
       <Card><h3>Lawan · {enemyFormation}</h3><MiniPitch formation={enemyFormation} lineup={enemyLineup} /><div className="lineupList compactList">{enemyLineup.map(({ player, slot }, idx) => <div key={`${slot.pos}-${player.id}-${idx}`}><b>{slot.pos}</b><span>{player.name}</span><small>{player.trait}</small><strong>{player.overall}</strong></div>)}</div></Card>
@@ -6101,6 +6172,45 @@ function PreMatchTab({ preMatch, teams, formation, setFormation, lineupOverrides
   </Section>;
 }
 
+
+function RealtimeMatchScoreboard({ game }) {
+  const home = game.stats?.home || {};
+  const away = game.stats?.away || {};
+  const homeSec = home.possessionSeconds || home.possession || 0;
+  const awaySec = away.possessionSeconds || away.possession || 0;
+  const total = homeSec + awaySec;
+  const homePos = total ? Math.round((homeSec / total) * 100) : 50;
+  const awayPos = 100 - homePos;
+  const status = game.ended ? (game.extraTimeStarted ? "FULL TIME · AET" : "FULL TIME") : game.goalPause ? "GOAL CHECK" : game.rt?.paused ? "PAUSED" : "LIVE";
+  return <div className="premiumScoreboard">
+    <div className="teamSide home">
+      <small>{game.homeFormation} · {game.homeStyle}</small>
+      <b>{game.homeName}</b>
+      <span>{home.shots || 0} shots · xG {(Math.round((home.xg || 0) * 100) / 100).toFixed(2)}</span>
+    </div>
+    <div className="scoreCore">
+      <div className="livePill">{status}</div>
+      <small>{formatClock(game)} {game.extraTimeStarted ? "· ET" : ""}</small>
+      <strong><em>{game.score.home}</em><span>-</span><em>{game.score.away}</em></strong>
+      <div className="scoreSubMeta">
+        <span><b>{homePos}%</b><small>Home poss</small></span>
+        <span><b>{home.onTarget || 0}-{away.onTarget || 0}</b><small>On target</small></span>
+        <span><b>{homePos > awayPos ? game.homeName : awayPos > homePos ? game.awayName : "Even"}</b><small>{homePos === awayPos ? "Momentum imbang" : "Pegang bola lebih lama"}</small></span>
+      </div>
+    </div>
+    <div className="teamSide away">
+      <small>{game.awayFormation} · {game.awayStyle}</small>
+      <b>{game.awayName}</b>
+      <span>{away.shots || 0} shots · xG {(Math.round((away.xg || 0) * 100) / 100).toFixed(2)}</span>
+    </div>
+    <div className="scoreRibbon">
+      <span><b>{homePos}%</b><small>Home Poss</small></span>
+      <span><b>{home.shots || 0} - {away.shots || 0}</b><small>Shots</small></span>
+      <span><b>{Math.round((home.passOk || 0) / Math.max(1, home.passes || 1) * 100)}% - {Math.round((away.passOk || 0) / Math.max(1, away.passes || 1) * 100)}%</b><small>Pass Accuracy</small></span>
+      <span><b>{home.fouls || 0} - {away.fouls || 0}</b><small>Fouls</small></span>
+    </div>
+  </div>;
+}
 
 function RealtimeSoccerMatch({ active, selectedId, setSelectedId, onAction, finishWeek, aiPaused, setAiPaused, helpMode = false }) {
   const game = active.game;
@@ -6118,11 +6228,7 @@ function RealtimeSoccerMatch({ active, selectedId, setSelectedId, onAction, fini
   return <Section title="Real-Time Football v14 Pro AI Fast Match" sub="Bola out/in aktif, kick-off aman di area sendiri, 1 menit game ≈ 1 detik real-time, stamina memengaruhi gerak, dan substitution dibatasi 3 pemain.">
     <div className={`realMatchLayout proMobile ${viewMode === "3d" ? "view3d" : "view2d"}`}>
       <Card className="realPitchCard">
-        <div className="realTopHud">
-          <div><b>{game.homeName}</b><small>{game.homeFormation} · {game.homeStyle}</small></div>
-          <strong><small>{formatClock(game)} {game.extraTimeStarted ? "· ET" : ""}</small>{game.score.home} - {game.score.away}</strong>
-          <div><b>{game.awayName}</b><small>{game.awayFormation} · {game.awayStyle}</small></div>
-        </div>
+        <RealtimeMatchScoreboard game={game} />
         <div className="landscapeHint">Putar ke landscape untuk kontrol match paling nyaman</div>{game.rt?.ballState && (game.rt.ballState.until || 0) > rtLiveNow(game) && <div className={`ballStateChip ${game.rt.ballState.type}`}>{game.rt.ballState.label}<small>{game.rt.ballState.restart || "live"}</small></div>}
         <RealFloatingInfo game={game} selected={selected} carrier={carrier} keeperRushActive={keeperRushActive} />
         <RealtimeStaminaDock game={game} selected={selected} />
@@ -6393,12 +6499,29 @@ function RealtimePitch({ game, selectedId, setSelectedId, onAction, canControl, 
   const pieces = (game.pieces || []).filter((p) => rtAlive(game, p));
   const sorted = pieces.slice().sort((a, b) => a.ry - b.ry);
   return <div className={`realPitch ${viewMode === "3d" ? "is3d" : "is2d"}`}>
-    <div className="realHalfLine" /><div className="realCenterCircle" /><div className="realBox top" /><div className="realBox bottom" /><div className="realGoal top" /><div className="realGoal bottom" />
+    <div className="realHalfLine" />
+    <div className="realCenterCircle" />
+    <div className="realCenterSpot" />
+    <div className="realBox top" />
+    <div className="realBox bottom" />
+    <div className="realSixYard top" />
+    <div className="realSixYard bottom" />
+    <div className="realPenaltySpot top" />
+    <div className="realPenaltySpot bottom" />
+    <div className="realPenaltyArc top" />
+    <div className="realPenaltyArc bottom" />
+    <div className="realGoal top"><i /><i /><i /></div>
+    <div className="realGoal bottom"><i /><i /><i /></div>
     {sorted.map((p) => {
       const left = `${clamp(p.rx ?? gridToFieldX(p.x), 0, FIELD_W)}%`;
       const top = `${(clamp(p.ry ?? gridToFieldY(p.y), 0, FIELD_H) / FIELD_H) * 100}%`;
-      return <button key={p.id} className={`realPlayer ${p.side} ${p.side === game.userSide ? "mine" : ""} ${selectedId === p.id ? "selected" : ""} ${game.ballOwnerId === p.id ? "hasBall" : ""} ${p.vacant ? "vacant" : ""} ${viewMode === "3d" ? "stickman" : ""}`} style={{ left, top }} onClick={(e) => { e.stopPropagation(); if (p.side === game.userSide) setSelectedId(p.id); }}>
-        {viewMode === "3d" ? <><i className="head" /><i className="body" /><i className="leg l1" /><i className="leg l2" /></> : <><b>{p.role}</b><small>{Math.round(p.overall)}</small></>}<span>{firstName(p.name)}</span><div className="rtEnergyBar"><i style={{ width: `${clamp(p.energy || 0, 0, 100)}%` }} /></div>{game.ballOwnerId === p.id && <em>⚽</em>}
+      const angle = Math.round((Math.atan2(p.faceY ?? (p.side === "home" ? -1 : 1), p.faceX ?? 0) * 180) / Math.PI + 90);
+      return <button key={p.id} className={`realPlayer ${p.side} ${p.side === game.userSide ? "mine" : ""} ${selectedId === p.id ? "selected" : ""} ${game.ballOwnerId === p.id ? "hasBall" : ""} ${p.vacant ? "vacant" : ""} ${viewMode === "3d" ? "stickman" : ""}`} style={{ left, top, "--face-angle": `${angle}deg`, "--motion-speed": `${clamp(p.animSpeed || 0.25, 0.2, 1.1)}` }} onClick={(e) => { e.stopPropagation(); if (p.side === game.userSide) setSelectedId(p.id); }}>
+        {viewMode === "3d"
+          ? <><i className="head" /><i className="body" /><i className="leg l1" /><i className="leg l2" /></>
+          : <><u className="dirArrow" /><div className="realPlayerBadge"><b>{p.role}</b><small>{Math.round(p.overall)}</small></div><div className="realPlayerName">{firstName(p.name)}</div></>}
+        <div className="rtEnergyBar"><i style={{ width: `${clamp(p.energy || 0, 0, 100)}%` }} /></div>
+        {game.ballOwnerId === p.id && <em>⚽</em>}
       </button>;
     })}
     <span className={`realBall ${game.ballOwnerId ? "owned" : "free"}`} style={{ left: `${clamp(ball.x, 0, FIELD_W)}%`, top: `${clamp(ball.y, 0, FIELD_H) / FIELD_H * 100}%` }}>⚽</span>
@@ -6605,10 +6728,100 @@ function SquadTab({ team, selected, setSelected, sell, listLoan, kickPlayer, ext
   </Section>;
 }
 function traitText(key) { const t = TRAITS.find((x) => x.key === key); return t ? `${t.icon} ${t.key}` : key; }
+function formationRoleGroups(formation) {
+  const groups = { gk: 0, def: 0, mid: 0, atk: 0 };
+  lineForFormation(formation).forEach(({ pos }) => {
+    if (pos === "GK") groups.gk += 1;
+    else if (["CB", "LB", "RB", "LWB", "RWB"].includes(pos)) groups.def += 1;
+    else if (["CDM", "CM", "CAM", "LM", "RM"].includes(pos)) groups.mid += 1;
+    else groups.atk += 1;
+  });
+  return groups;
+}
+function slotZone(pos) {
+  if (pos === "GK") return "gk";
+  if (["CB", "LB", "RB", "LWB", "RWB"].includes(pos)) return "def";
+  if (["CDM", "CM", "CAM", "LM", "RM"].includes(pos)) return "mid";
+  return "atk";
+}
+function fitLabel(score) {
+  if (score >= 18) return "Sangat cocok";
+  if (score >= 10) return "Cocok";
+  return "Darurat";
+}
+function manualOverridesFromLineup(lineup) {
+  const next = {};
+  (lineup || []).forEach((entry, idx) => {
+    if (entry?.player?.id != null) next[idx] = entry.player.id;
+  });
+  return next;
+}
+function assignPlayerToSlot(lineup, slotIndex, playerId) {
+  const next = manualOverridesFromLineup(lineup);
+  const currentSlot = (lineup || []).findIndex((entry) => String(entry?.player?.id) === String(playerId));
+  if (currentSlot >= 0 && currentSlot !== slotIndex) next[currentSlot] = next[slotIndex];
+  next[slotIndex] = playerId;
+  return next;
+}
+function heatMetaForSlot(pos) {
+  const zone = slotZone(pos);
+  if (zone === "gk") return { size: 17, strength: 0.62 };
+  if (zone === "def") return { size: 20, strength: 0.74 };
+  if (zone === "mid") return { size: 24, strength: 0.88 };
+  return { size: 22, strength: 0.82 };
+}
+function FormationHeatmap({ formation, lineup }) {
+  const slots = lineForFormation(formation);
+  return <div className="formationHeatmapWrap">
+    <div className="formationHeatmapPitch">
+      <div className="heatCenterCircle" />
+      <div className="heatHalfLine" />
+      <div className="heatBox top" />
+      <div className="heatBox bottom" />
+      {slots.map((slot, idx) => {
+        const meta = heatMetaForSlot(slot.pos);
+        const player = lineup?.[idx]?.player;
+        return <div key={`${slot.pos}-${idx}`} className={`heatBlob ${slotZone(slot.pos)}`} style={{ left: `${(slot.x / (BOARD_COLS - 1)) * 100}%`, top: `${(slot.y / (BOARD_ROWS - 1)) * 100}%`, width: `${meta.size}%`, height: `${meta.size}%`, opacity: meta.strength }}>
+          <span>{slot.pos}</span>
+          <small>{firstName(player?.name || slot.pos)}</small>
+        </div>;
+      })}
+    </div>
+    <div className="heatLegend">
+      <span className="gk"><i />GK / sapuan</span>
+      <span className="def"><i />blok & cover</span>
+      <span className="mid"><i />sirkulasi & progresi</span>
+      <span className="atk"><i />serangan & finis</span>
+    </div>
+  </div>;
+}
+function FormationSummary({ formation, lineup, selectedSlot = 0, compact = false }) {
+  const groups = formationRoleGroups(formation);
+  const selected = lineup?.[selectedSlot];
+  const player = selected?.player;
+  return <div className={`formationSummary ${compact ? "compact" : ""}`}>
+    <div className="formationChips">
+      <span><b>{formation}</b><small>Shape aktif</small></span>
+      <span><b>{groups.def}-{groups.mid}-{groups.atk}</b><small>Belakang-Tengah-Depan</small></span>
+      <span><b>{lineup?.length || 0}</b><small>Starter</small></span>
+    </div>
+    {player && <div className="formationSpotlight">
+      <div>
+        <small>Slot dipilih</small>
+        <b>{selected?.slot?.pos} · {player.name}</b>
+        <span>{traitText(player.trait)} · OVR {player.overall} · {slotZone(selected?.slot?.pos || player.pos) === "def" ? "Lini belakang" : slotZone(selected?.slot?.pos || player.pos) === "mid" ? "Lini tengah" : slotZone(selected?.slot?.pos || player.pos) === "atk" ? "Lini depan" : "Penjaga gawang"}</span>
+      </div>
+      {!compact && <div className="formationSpotlightStats">
+        <i>PAC {player.pace}</i><i>SHO {player.shoot}</i><i>PAS {player.pass}</i><i>DEF {player.defend}</i>
+      </div>}
+    </div>}
+  </div>;
+}
 function PlayerCard({ player, active, onClick }) { return <button className={`playerCard ${active ? "active" : ""} ${player.injuredWeeks > 0 || player.bannedWeeks > 0 ? "unavailable" : ""} ${player.pendingOffer ? "hasOffer" : ""}`} onClick={onClick}><span>{player.pos}</span><b>{player.name}</b><small>{player.age} thn · {player.scouted ? `POT ${player.potential}` : "POT ??"} · {player.personality || "Professional"} · {player.loan ? "Loan" : money(player.value)}</small><strong>{player.overall}</strong><div><i>PAC {player.pace}</i><i>SHO {player.shoot}</i><i>PAS {player.pass}</i><i>DEF {player.defend}</i></div><small>{traitText(player.trait)} {player.injuredWeeks ? `· 🏥 ${player.injuredWeeks}w` : ""}{player.bannedWeeks ? `· 🟥 ${player.bannedWeeks}w` : ""}{player.pendingOffer ? " · 📩 Offer" : ""}</small><small className="roleMini">Gaji {money(player.wage || 0)} · XP {player.xp || 0}/100 {player.listedForSale ? " · Dijual" : ""}{player.listedForLoan ? " · Loan list" : ""}</small></button>; }
 function TacticsTab({ team, formation, setFormation, lineupOverrides, setLineupOverrides, setTeamStyle }) {
   const [selectedSlot, setSelectedSlot] = useState(0);
   const [benchSearch, setBenchSearch] = useState("");
+  const [dragItem, setDragItem] = useState(null);
   const lineup = pickLineup(team, formation, lineupOverrides);
   const selected = lineup[selectedSlot];
   const selectedRole = selected?.slot?.pos || "CM";
@@ -6627,17 +6840,31 @@ function TacticsTab({ team, formation, setFormation, lineupOverrides, setLineupO
     return next;
   });
   const clearManual = () => setLineupOverrides({});
+  const handleDropOnSlot = (slotIndex) => {
+    if (!dragItem?.playerId) return;
+    setLineupOverrides(assignPlayerToSlot(lineup, slotIndex, dragItem.playerId));
+    setSelectedSlot(slotIndex);
+    setDragItem(null);
+  };
+  const startDragSlot = (slotIndex) => setDragItem({ playerId: lineup[slotIndex]?.player?.id, label: lineup[slotIndex]?.player?.name || "Pemain", source: "lineup", slotIndex });
+  const startDragBench = (player) => setDragItem({ playerId: player.id, label: player.name, source: "bench" });
+  const dragHint = dragItem ? `Menyeret ${firstName(dragItem.label)} · drop ke titik lapangan / daftar Starting XI` : "Drag & drop aktif: seret pemain dari lapangan, Starting XI, atau daftar pengganti.";
   return <Section title="Taktik & Formasi" sub="Formasi, starting XI, dan gaya taktik langsung memengaruhi AI teammate, off-ball movement, pressing, passing, dan shot saat MAIN PEKAN.">
     <Card className="styleCoachCard"><h3>Gaya Main Aktif: {team.style}</h3><p className="muted">Pilih style agar menu taktik benar-benar berpengaruh ke match. Possession lebih aman, Counter lebih progresif, High Press lebih agresif, Park Bus lebih kuat bertahan.</p><div className="formationButtons styleButtons">{Object.keys(STYLE_PROFILES).map((style) => <button key={style} className={team.style === style ? "active" : ""} onClick={() => setTeamStyle(style)}>{style}<small>{STYLE_PROFILES[style].tempo}</small></button>)}</div></Card>
-    <div className="formationButtons">{Object.keys(FORMATIONS).map((f) => <button key={f} className={formation === f ? "active" : ""} onClick={() => { setFormation(f); setSelectedSlot(0); }}>{f}</button>)}</div>
+    <div className="formationButtons">{Object.keys(FORMATIONS).map((f) => <button key={f} className={formation === f ? "active" : ""} onClick={() => { setFormation(f); setSelectedSlot(0); setDragItem(null); }}>{f}</button>)}</div>
+    <div className="dragDropHint">{dragHint}</div>
     <div className="tacticsGrid pro">
-      <Card><MiniPitch formation={formation} lineup={lineup} selectedSlot={selectedSlot} setSelectedSlot={setSelectedSlot} /></Card>
-      <Card><div className="cardTop"><h3>Starting XI</h3><button className="ghost" onClick={clearManual}>Auto XI</button></div><div className="lineupList editable">{lineup.map(({ player, slot, manual }, idx) => <button key={`${slot.pos}-${player.id}-${idx}`} className={idx === selectedSlot ? "active" : ""} onClick={() => setSelectedSlot(idx)}><b>{slot.pos}</b><span>{player.name}</span><small>{manual ? "Manual" : player.trait}</small><strong>{player.overall}</strong></button>)}</div></Card>
-      <Card><h3>Ganti pemain untuk {selectedRole}</h3><p className="muted">Daftar ini sekarang menampilkan semua pemain senior yang tersedia, termasuk pemain yang sedang ada di Starting XI untuk swap. Pemain cedera/sanksi tidak tampil.</p><div className="subTools tacticsSearch"><input value={benchSearch} onChange={(e) => setBenchSearch(e.target.value)} placeholder="Cari nama / posisi..." /></div><div className="benchList">{candidates.map((p) => <button key={p.id} onClick={() => changePlayer(p.id)}><b>{p.pos}</b><span>{p.name}</span><small>{usedIds.has(p.id) ? "Starting XI · akan ditukar" : "Cadangan"} · {traitText(p.trait)} · skor cocok {benchFitScore(p, selectedRole, selected?.player?.overall || 60)}</small><strong>{p.overall}</strong></button>)}</div></Card>
+      <Card className="formationPanelCard"><div className="cardTop"><h3>Shape Lapangan · {formation}</h3><span className="formationMeta">Klik titik pemain atau drag & drop</span></div><MiniPitch formation={formation} lineup={lineup} selectedSlot={selectedSlot} setSelectedSlot={setSelectedSlot} dragItem={dragItem} onSlotDragStart={startDragSlot} onSlotDrop={handleDropOnSlot} onClearDrag={() => setDragItem(null)} /><FormationSummary formation={formation} lineup={lineup} selectedSlot={selectedSlot} /></Card>
+      <Card><div className="cardTop"><h3>Starting XI</h3><button className="ghost" onClick={clearManual}>Auto XI</button></div><div className="lineupList editable">{lineup.map(({ player, slot, manual }, idx) => <button key={`${slot.pos}-${player.id}-${idx}`} className={`${idx === selectedSlot ? "active" : ""} ${dragItem?.slotIndex === idx ? "dragOrigin" : ""}`} draggable onDragStart={() => startDragSlot(idx)} onDragEnd={() => setDragItem(null)} onDragOver={(e) => dragItem && e.preventDefault()} onDrop={(e) => { e.preventDefault(); handleDropOnSlot(idx); }} onClick={() => setSelectedSlot(idx)}><b>{slot.pos}</b><span>{player.name}</span><small>{manual ? "Manual" : player.trait}</small><strong>{player.overall}</strong></button>)}</div></Card>
+      <Card><h3>Ganti pemain untuk {selectedRole}</h3><p className="muted">Klik sekali untuk ganti cepat, atau drag pemain dari daftar ini ke titik lapangan / slot Starting XI untuk swap yang lebih natural.</p><div className="subTools tacticsSearch"><input value={benchSearch} onChange={(e) => setBenchSearch(e.target.value)} placeholder="Cari nama / posisi..." /></div><div className="benchList">{candidates.map((p) => <button key={p.id} draggable onDragStart={() => startDragBench(p)} onDragEnd={() => setDragItem(null)} onClick={() => changePlayer(p.id)}><b>{p.pos}</b><span>{p.name}</span><small>{usedIds.has(p.id) ? "Starting XI · akan ditukar" : "Cadangan"} · {traitText(p.trait)} · {fitLabel(benchFitScore(p, selectedRole, selected?.player?.overall || 60))} · skor {benchFitScore(p, selectedRole, selected?.player?.overall || 60)}</small><strong>{p.overall}</strong></button>)}</div></Card>
+      <Card className="heatmapCard"><div className="cardTop"><h3>Heatmap Posisi · {formation}</h3><span className="formationMeta">Zona kerja rata-rata per pemain</span></div><FormationHeatmap formation={formation} lineup={lineup} /><p className="muted">Heatmap membantu membaca kepadatan lini. Area biru = build-up/cover, ungu = sirkulasi, merah = serangan. Cocok untuk cek shape sebelum kickoff.</p></Card>
     </div>
   </Section>;
 }
-function MiniPitch({ formation, lineup, selectedSlot = -1, setSelectedSlot = () => {} }) { const slots = lineForFormation(formation); return <div className="miniPitch">{slots.map((slot, i) => <button key={`${slot.pos}-${i}`} className={selectedSlot === i ? "active" : ""} onClick={() => setSelectedSlot(i)} style={{ left: `${(slot.x / (BOARD_COLS - 1)) * 100}%`, top: `${(slot.y / (BOARD_ROWS - 1)) * 100}%` }}><b>{lineup[i]?.player.overall || "?"}</b><span>{slot.pos}</span><small>{lineup[i]?.player.name.split(" ")[0]}</small></button>)}</div>; }
+function MiniPitch({ formation, lineup, selectedSlot = -1, setSelectedSlot = () => {}, dragItem = null, onSlotDragStart = () => {}, onSlotDrop = () => {}, onClearDrag = () => {} }) {
+  const slots = lineForFormation(formation);
+  return <div className="miniPitch modern"><div className="miniPitchCenterCircle" /><div className="miniPitchHalfLine" /><div className="miniPitchBox top" /><div className="miniPitchBox bottom" /><div className="miniPitchSix top" /><div className="miniPitchSix bottom" /><div className="miniPitchGoal top" /><div className="miniPitchGoal bottom" />{slots.map((slot, i) => { const player = lineup[i]?.player; const isDragOrigin = dragItem?.slotIndex === i; return <button key={`${slot.pos}-${i}`} draggable className={`${selectedSlot === i ? "active" : ""} zone-${slotZone(slot.pos)} ${dragItem ? "dropReady" : ""} ${isDragOrigin ? "dragOrigin" : ""}`} onDragStart={() => onSlotDragStart(i)} onDragEnd={onClearDrag} onDragOver={(e) => dragItem && e.preventDefault()} onDrop={(e) => { e.preventDefault(); onSlotDrop(i); }} onClick={() => setSelectedSlot(i)} style={{ left: `${(slot.x / (BOARD_COLS - 1)) * 100}%`, top: `${(slot.y / (BOARD_ROWS - 1)) * 100}%` }}><b>{player?.overall || "?"}</b><span>{slot.pos}</span><small>{firstName(player?.name || "Slot")}</small></button>; })}</div>;
+}
 function CalendarTab({ fixtures, teams, week, season, log, myTeam, competitionState }) {
   const rows = [];
   const startWeek = Math.max(1, week - 4);
@@ -6684,7 +6911,7 @@ function CalendarTab({ fixtures, teams, week, season, log, myTeam, competitionSt
         </div>
       </Card>
       <Card><h3>Agenda Tim Kamu</h3><div className="calendarList">{rows.map((r) => <div key={r.key} className={`calendarRow ${r.week === week ? "active" : ""}`}><strong>{r.icon}</strong><span><b>{r.date}</b><small>Pekan {r.week} · {r.competition}</small></span><em>{r.home && r.away ? `${r.home.name} vs ${r.away.name}` : r.note}</em>{r.status && <i>{r.status.homeGoals}-{r.status.awayGoals}</i>}</div>)}</div></Card>
-      <Card><h3>Siklus Season</h3><div className="competitionStack"><div><b>🛒 Transfer Window</b><span>{transferWindowLabel(week)}</span><small>Beli/jual hanya saat window.</small></div><div><b>👑 Number 1 Championship</b><span>Pekan 50-58</span><small>Top 1-5 setiap liga, group stage, semi, final, trophy NO.1.</small></div><div><b>🏆🌍 World Cup Championship</b><span>{wccActive ? "Season ini aktif" : "Aktif lagi setiap 3 season"}</span><small>Rank 1-3 tiap liga + 15 klub undangan dunia.</small></div>{LEAGUES.map((l) => <div key={l.key}><b>🏟️ {LEAGUE_CHAMPIONSHIP_NAMES[l.key]}</b><span>{l.name}</span><small>{LEAGUE_CHAMPIONSHIP_IMPACT[l.key]}</small></div>)}</div></Card>
+      <Card><h3>Siklus Season</h3><div className="competitionStack"><div><b>🛒 Transfer Window</b><span>{transferWindowLabel(week)}</span><small>Beli/jual hanya saat window.</small></div><div><b>👑 Number 1 Championship</b><span>Pekan 50-58</span><small>Top 1-5 dari setiap liga aktif, group stage, semi, final, trophy NO.1.</small></div><div><b>🏆🌍 World Cup Championship</b><span>{wccActive ? "Season ini aktif" : "Aktif lagi setiap 3 season"}</span><small>Rank 1-3 tiap liga real-world + 15 klub undangan dunia.</small></div>{LEAGUES.map((l) => <div key={l.key}><b>🏟️ {LEAGUE_CHAMPIONSHIP_NAMES[l.key]}</b><span>{l.name}</span><small>{LEAGUE_CHAMPIONSHIP_IMPACT[l.key]}</small></div>)}</div></Card>
     </div>
   </Section>;
 }
@@ -6724,7 +6951,7 @@ function ScheduleTab({ fixtures, teams, week, log, competitionState }) {
 function ResultRow({ m }) { const mine = m.homeId === MY_TEAM_ID || m.awayId === MY_TEAM_ID; return <div className={`resultRow ${mine ? "mine" : ""}`}><small>Pekan {m.week}{m.derby ? " · Derby" : ""}{m.cupName ? ` · ${m.cupName} ${m.stage || ""}` : m.leagueKey ? ` · ${leagueName(m.leagueKey)}` : ""}</small><b>{m.home}</b><strong>{m.homeGoals} - {m.awayGoals}</strong><b>{m.away}</b>{m.events?.length > 0 && <p>{m.events.filter((e) => e.type === "goal").map((e) => `⚽ ${e.min}' ${e.player}`).join(" · ")}</p>}</div>; }
 function TableTab({ teams }) {
   const tables = groupedLeagueTables(teams);
-  return <Section title="Klasemen" sub="4 liga aktif: Liga Championship → Liga 3 → Liga 2 → Liga 1. Promosi/degradasi diproses akhir musim.">{tables.map((league) => <Card key={league.key} className="tableWrap"><h3>{league.name}</h3><div className="table"><div className="thead"><span>#</span><span>Tim</span><span>P</span><span>M</span><span>S</span><span>K</span><span>GD</span><span>PTS</span></div>{league.teams.map((t, i) => { const p = t.wins + t.draws + t.losses; const gd = t.gf - t.ga; const zone = i < 3 && league.promo ? "promo" : i >= league.teams.length - 3 && league.relegation ? "relegate" : ""; return <div className={`tr ${t.id === MY_TEAM_ID ? "mine" : ""} ${zone}`} key={t.id}><span>{i + 1}</span><span><b>{t.name} {t.numberOneTitles ? "👑" : ""}</b><small>{t.style} · Power {Math.round(teamPower(t))} · {(t.form || []).join(" ")}</small></span><span>{p}</span><span>{t.wins}</span><span>{t.draws}</span><span>{t.losses}</span><span>{gd > 0 ? `+${gd}` : gd}</span><strong>{t.pts}</strong></div>; })}</div></Card>)}</Section>;
+  return <Section title="Klasemen" sub="Semua liga real-world berjalan paralel. Championship hanya tampil sebagai liga pilihan sendiri, bukan campuran Premier League.">{tables.map((league) => <Card key={league.key} className="tableWrap"><h3>{league.name}</h3><div className="table"><div className="thead"><span>#</span><span>Tim</span><span>P</span><span>M</span><span>S</span><span>K</span><span>GD</span><span>PTS</span></div>{league.teams.map((t, i) => { const p = t.wins + t.draws + t.losses; const gd = t.gf - t.ga; const zone = i < 3 && league.promo ? "promo" : i >= league.teams.length - 3 && league.relegation ? "relegate" : ""; return <div className={`tr ${t.id === MY_TEAM_ID ? "mine" : ""} ${zone}`} key={t.id}><span>{i + 1}</span><span><b>{t.name} {t.numberOneTitles ? "👑" : ""}</b><small>{t.style} · Power {Math.round(teamPower(t))} · {(t.form || []).join(" ")}</small></span><span>{p}</span><span>{t.wins}</span><span>{t.draws}</span><span>{t.losses}</span><span>{gd > 0 ? `+${gd}` : gd}</span><strong>{t.pts}</strong></div>; })}</div></Card>)}</Section>;
 }
 function TransferTab({ market, cash, week, buy, loan, scout, scoutRandom, scoutQueue, scoutUsed, scoutLimit, transferActionWeek, pendingTransfers = [], rejectScoutReport }) {
   const [filter, setFilter] = useState("ALL");
@@ -6863,13 +7090,33 @@ function ChampionsTab({ teams, week, log }) {
 
 function ObjectivesTab({ objectives, ctx, claimed }) { return <Section title="Board Vision" sub="Target hanya panduan seperti manager mode. Tidak ada reward objective otomatis."><div className="cardsGrid">{objectives.map((o) => { const val = objectiveProgress(o, ctx); const done = claimed.includes(o.key) || objectiveComplete(o, ctx); return <Card key={o.key} className={done ? "done" : ""}><h3>{done ? "✅" : "🎯"} {o.title}</h3><p>{o.desc}</p><ProgressLine label="Progress" value={val} target={o.target} done={claimed.includes(o.key)} /><b>Reward otomatis dimatikan</b></Card>; })}</div></Section>; }
 function ClubsTab({ teams }) {
-  return <Section title="Klub" sub="Database klub real-world sekarang memuat liga utama, profil singkat, manager, seed roster, budget, wage pressure, trophy, growth score, dan berita.">
-    <div className="clubGrid">{teams.map((t) => {
+  const [clubSearch, setClubSearch] = useState("");
+  const [leagueFilter, setLeagueFilter] = useState("all");
+  const activeLeagues = LEAGUES.filter((l) => teams.some((t) => t.leagueKey === l.key));
+  const q = clubSearch.trim().toLowerCase();
+  const filteredTeams = teams.filter((t) => {
+    if (leagueFilter !== "all" && t.leagueKey !== leagueFilter) return false;
+    if (!q) return true;
+    const haystack = [
+      t.name, t.city, t.realLeague, t.realManager, t.style, t.clubOverview,
+      ...(t.players || []).slice(0, 30).map((p) => `${p.name} ${p.pos} ${p.overall}`),
+    ].join(" ").toLowerCase();
+    return haystack.includes(q);
+  });
+  return <Section title="Klub" sub="Database klub real-world dapat dicari berdasarkan liga, klub, manager, gaya main, dan nama pemain seed roster.">
+    <div className="clubExplorerBar">
+      <input value={clubSearch} onChange={(e) => setClubSearch(e.target.value)} placeholder="Cari klub / liga / manager / pemain..." />
+      <div className="clubLeaguePills"><button type="button" className={leagueFilter === "all" ? "active" : ""} onClick={() => setLeagueFilter("all")}>Semua</button>{activeLeagues.map((league) => <button key={league.key} type="button" className={leagueFilter === league.key ? "active" : ""} onClick={() => setLeagueFilter(league.key)}>{league.short}</button>)}</div>
+      <small>{filteredTeams.length}/{teams.length} klub</small>
+    </div>
+    <div className="clubGrid">{filteredTeams.map((t) => {
       const chaos = starChaos(t);
+      const realSeedNames = (t.players || []).filter((p) => p.realRosterSeed).slice(0, 7).map((p) => p.name).join(" · ");
       return <Card key={t.id} style={{ borderTop: `4px solid ${t.color}` }}>
         <h3>{t.name} {t.numberOneTitles ? "👑 NO.1" : ""}</h3>
-        <p className="muted">{t.city} · Career tier: {leagueName(t.leagueKey)}</p>
+        <p className="muted">{t.city} · Liga: {leagueName(t.leagueKey)}</p>
         {t.clubOverview && <p className="clubNewsMini">🌍 <b>{t.realLeague}</b>{t.realManager ? ` · Manager: ${t.realManager}` : ""} · {t.clubOverview}</p>}
+        {realSeedNames && <p className="clubNewsMini">👥 <b>Seed roster</b> · {realSeedNames}</p>}
         <div className="infoGrid"><span>Power</span><b>{Math.round(teamPower(t))}</b><span>Fans</span><b>{t.fans.toLocaleString("id-ID")}</b><span>Pemain</span><b>{t.players.length}</b><span>Seed Real</span><b>{(t.players || []).filter((p) => p.realRosterSeed).length}</b><span>Budget</span><b>{money(t.budget || INITIAL_CASH)}</b><span>Wage</span><b>{money(teamWeeklyWage(t))}</b><span>Stars 85+/90+</span><b>{chaos.stars85}/{chaos.stars90}</b><span>AI Style</span><b>{t.style}</b><span>Growth</span><b>{Math.round(t.growthScore || 0)}</b></div>
         {chaos.tooMany && <p className="clubNewsMini">💥 <b>Star Chaos</b> · ruang ganti bisa berantakan karena terlalu banyak bintang.</p>}
         {(t.trophies || []).slice(0, 2).map((tr, i) => <p key={`tr-${i}`} className="clubNewsMini">🏆 <b>{tr.name}</b> · S{tr.season} {tr.mark || ""}</p>)}

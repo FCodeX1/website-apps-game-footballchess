@@ -1,16 +1,16 @@
 {
-  "name": "bola-catur-arena-v22-real-world-roster-refresh",
+  "name": "bola-catur-arena-v23-super-landscape-league-roster",
   "private": true,
-  "version": "22.1.0",
+  "version": "23.0.0",
   "type": "module",
   "engines": {
     "node": ">=20 <23",
     "npm": ">=10 <12"
   },
   "scripts": {
-    "dev": "vite --host 0.0.0.0 --force",
-    "build": "vite build",
-    "preview": "vite preview --host 0.0.0.0",
+    "dev": "node ./node_modules/vite/bin/vite.js --host 0.0.0.0 --force",
+    "build": "node ./node_modules/vite/bin/vite.js build",
+    "preview": "node ./node_modules/vite/bin/vite.js preview --host 0.0.0.0",
     "lan": "npm run build && node server/lan-server.js",
     "lan:server": "node server/lan-server.js",
     "qa": "npm run qa:static && npm run qa:full",
